@@ -38,18 +38,18 @@ func ({{$ltable.DownSingular}}L) Load{{$relAlias.Local}}({{if $.NoContext}}e boi
 		}
 	}
 
-	args := make(map[interface{}]struct{})
+	args := make(map[interface{}]interface{})
 	if singular {
 		if object.R == nil {
 			object.R = &{{$ltable.DownSingular}}R{}
 		}
-		args[object.{{$col}}] = struct{}{}
+		args[boil.GenLoadMapKey(object.{{$col}})] = object.{{$col}}
 	} else {
 		for _, obj := range slice {
 			if obj.R == nil {
 				obj.R = &{{$ltable.DownSingular}}R{}
 			}
-			args[obj.{{$col}}] = struct{}{}
+			args[boil.GenLoadMapKey(obj.{{$col}})] = obj.{{$col}}
 		}
 	}
 
@@ -59,7 +59,7 @@ func ({{$ltable.DownSingular}}L) Load{{$relAlias.Local}}({{if $.NoContext}}e boi
 
 	argsSlice := make([]interface{}, len(args))
 	i := 0
-	for arg := range args {
+	for _, arg := range args {
 		argsSlice[i] = arg
 		i++
 	}

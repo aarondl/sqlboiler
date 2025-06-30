@@ -37,16 +37,16 @@ func ({{$ltable.DownSingular}}L) Load{{$rel.Foreign}}({{if $.NoContext}}e boil.E
 		}
 	}
 
-	args := make(map[interface{}]struct{})
+	args := make(map[interface{}]interface{})
 	if singular {
 		if object.R == nil {
 			object.R = &{{$ltable.DownSingular}}R{}
 		}
 		{{if $usesPrimitives -}}
-		args[object.{{$col}}] = struct{}{}
+		args[boil.GenLoadMapKey(object.{{$col}})] = object.{{$col}}
 		{{else -}}
 		if !queries.IsNil(object.{{$col}}) {
-			args[object.{{$col}}] = struct{}{}
+			args[boil.GenLoadMapKey(object.{{$col}})] = object.{{$col}}
 		}
 		{{end}}
 	} else {
@@ -56,10 +56,10 @@ func ({{$ltable.DownSingular}}L) Load{{$rel.Foreign}}({{if $.NoContext}}e boil.E
 			}
 
 			{{if $usesPrimitives -}}
-			args[obj.{{$col}}] = struct{}{}
+			args[boil.GenLoadMapKey(obj.{{$col}})] = obj.{{$col}}
 			{{else -}}
 			if !queries.IsNil(obj.{{$col}}) {
-				args[obj.{{$col}}] = struct{}{}
+				args[boil.GenLoadMapKey(obj.{{$col}})] = obj.{{$col}}
 			}
 			{{end}}
 		}
@@ -71,7 +71,7 @@ func ({{$ltable.DownSingular}}L) Load{{$rel.Foreign}}({{if $.NoContext}}e boil.E
 
 	argsSlice := make([]interface{}, len(args))
 	i := 0
-	for arg := range args {
+	for _, arg := range args {
 		argsSlice[i] = arg
 		i++
 	}
