@@ -64,6 +64,13 @@ func (o *{{$ltable.UpSingular}}) Add{{$relAlias.Local}}GP({{if not $.NoContext}}
 {{- end}}
 func (o *{{$ltable.UpSingular}}) Add{{$relAlias.Local}}({{if $.NoContext}}exec boil.Executor{{else}}ctx context.Context, exec boil.ContextExecutor{{end}}, insert bool, related ...*{{$ftable.UpSingular}}) error {
 	var err error
+	
+	{{if not $.NoHooks -}}
+	if err := o.doBeforeInsertHooks({{if not $.NoContext}}ctx, {{end -}} exec); err != nil {
+		return err
+	}
+	{{- end}}
+	
 	for _, rel := range related {
 		if insert {
 			{{if not .ToJoinTable -}}
@@ -175,7 +182,11 @@ func (o *{{$ltable.UpSingular}}) Add{{$relAlias.Local}}({{if $.NoContext}}exec b
 	{{end -}}
 	{{end -}}
 
+	{{if not $.NoHooks -}}
+	return o.doAfterInsertHooks({{if not $.NoContext}}ctx, {{end -}} exec)
+	{{- else -}}
 	return nil
+	{{- end}}
 }
 
 			{{- if (or .ForeignColumnNullable .ToJoinTable)}}
@@ -240,6 +251,12 @@ func (o *{{$ltable.UpSingular}}) Set{{$relAlias.Local}}GP({{if not $.NoContext}}
 // Sets related.R.{{$relAlias.Foreign}}'s {{$relAlias.Local}} accordingly.
 {{- end}}
 func (o *{{$ltable.UpSingular}}) Set{{$relAlias.Local}}({{if $.NoContext}}exec boil.Executor{{else}}ctx context.Context, exec boil.ContextExecutor{{end}}, insert bool, related ...*{{$ftable.UpSingular}}) error {
+	{{if not $.NoHooks -}}
+	if err := o.doBeforeDeleteHooks({{if not $.NoContext}}ctx, {{end -}} exec); err != nil {
+		return errors.Wrap(err, "failed to perform before delete hooks")
+	}
+	{{- end}}
+	
 	{{if .ToJoinTable -}}
 	query := "delete from {{.JoinTable | $.SchemaTable}} where {{.JoinLocalColumn | $.Quotes}} = {{if $.Dialect.UseIndexPlaceholders}}$1{{else}}?{{end}}"
 	values := []interface{}{{"{"}}o.{{$col}}}
@@ -268,6 +285,12 @@ func (o *{{$ltable.UpSingular}}) Set{{$relAlias.Local}}({{if $.NoContext}}exec b
 	if err != nil {
 		return errors.Wrap(err, "failed to remove relationships before set")
 	}
+
+	{{if not $.NoHooks -}}
+	if err := o.doAfterDeleteHooks({{if not $.NoContext}}ctx, {{end -}} exec); err != nil {
+		return errors.Wrap(err, "failed to perform after delete hooks")
+	}
+	{{- end}}
 
 	{{if and .ToJoinTable (not $.NoBackReferencing) -}}
 	remove{{$relAlias.Local}}From{{$relAlias.Foreign}}Slice(o, related)
@@ -346,7 +369,11 @@ func (o *{{$ltable.UpSingular}}) Remove{{$relAlias.Local}}({{if $.NoContext}}exe
 	if len(related) == 0 {
 		return nil
 	}
-
+	{{if not $.NoHooks -}}
+	if err := o.doBeforeDeleteHooks({{if not $.NoContext}}ctx, {{end -}} exec); err != nil {
+		return errors.Wrap(err, "failed to perform before delete hooks")
+	}
+	{{- end}}
 	var err error
 	{{if .ToJoinTable -}}
 	query := fmt.Sprintf(
@@ -392,6 +419,12 @@ func (o *{{$ltable.UpSingular}}) Remove{{$relAlias.Local}}({{if $.NoContext}}exe
 		}
 	}
 	{{end -}}
+
+	{{if not $.NoHooks -}}
+	if err := o.doAfterDeleteHooks({{if not $.NoContext}}ctx, {{end -}} exec); err != nil {
+		return errors.Wrap(err, "failed to perform after delete hooks")
+	}
+	{{- end}}
 
 	{{if and .ToJoinTable (not $.NoBackReferencing) -}}
 	remove{{$relAlias.Local}}From{{$relAlias.Foreign}}Slice(o, related)
