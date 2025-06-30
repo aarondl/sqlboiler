@@ -654,6 +654,17 @@ func TestSetComment(t *testing.T) {
 	}
 }
 
+func TestSetAppendComment(t *testing.T) {
+	t.Parallel()
+
+	q := &Query{}
+	SetAppendComment(q, "my comment")
+
+	if q.appendComment != "my comment" {
+		t.Errorf("Got invalid comment: %s", q.appendComment)
+	}
+}
+
 func TestRemoveSoftDeleteWhere(t *testing.T) {
 	t.Parallel()
 

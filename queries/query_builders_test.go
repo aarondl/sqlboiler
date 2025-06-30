@@ -707,3 +707,33 @@ func TestWriteComment(t *testing.T) {
 		t.Errorf(`bad two lines comment, got: %s`, got)
 	}
 }
+
+func TestWriteAppendComment(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		appendComment   string
+		expectPredicate func(sql string) bool
+	}{
+		{"", func(sql string) bool {
+			return !strings.Contains(sql, "/*")
+		}},
+		{"comment", func(sql string) bool {
+			return strings.Contains(sql, "; /* comment */")
+		}},
+		{"first\nsecond", func(sql string) bool {
+			return strings.Contains(sql, "; /* first\nsecond */")
+		}},
+	}
+
+	for i, test := range tests {
+		q := &Query{
+			appendComment: test.appendComment,
+			dialect:       &drivers.Dialect{LQ: '"', RQ: '"', UseIndexPlaceholders: true, UseTopClause: false},
+		}
+		sql, _ := BuildQuery(q)
+		if !test.expectPredicate(sql) {
+			t.Errorf("%d) Unexpected built SQL query: %s", i, sql)
+		}
+	}
+}
