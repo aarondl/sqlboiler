@@ -1,6 +1,6 @@
 module github.com/aarondl/sqlboiler/v4
 
-go 1.23.0
+go 1.24.6
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.4.1
