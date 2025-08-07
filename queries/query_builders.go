@@ -129,7 +129,7 @@ func buildSelectQuery(q *Query) (*bytes.Buffer, []interface{}) {
 		} else {
 			resp = joinBuf.String()
 		}
-		fmt.Fprintf(buf, resp)
+		buf.WriteString(resp)
 		strmangle.PutBuffer(joinBuf)
 	}
 
@@ -218,7 +218,7 @@ func buildUpdateQuery(q *Query) (*bytes.Buffer, []interface{}) {
 func writeParameterizedModifiers(q *Query, buf *bytes.Buffer, args *[]interface{}, keyword, delim string, clauses []argClause) {
 	argsLen := len(*args)
 	modBuf := strmangle.GetBuffer()
-	fmt.Fprintf(modBuf, keyword)
+	modBuf.WriteString(keyword)
 
 	for i, j := range clauses {
 		if i > 0 {
@@ -640,6 +640,6 @@ func writeCTEs(q *Query, buf *bytes.Buffer, args *[]interface{}) {
 	} else {
 		resp = withBuf.String()
 	}
-	fmt.Fprintf(buf, resp)
+	buf.WriteString(resp)
 	strmangle.PutBuffer(withBuf)
 }
