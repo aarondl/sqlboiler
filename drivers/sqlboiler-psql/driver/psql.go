@@ -15,8 +15,8 @@ import (
 
 	"github.com/aarondl/sqlboiler/v4/importers"
 
-	"github.com/friendsofgo/errors"
 	"github.com/aarondl/strmangle"
+	"github.com/friendsofgo/errors"
 
 	"github.com/aarondl/sqlboiler/v4/drivers"
 
@@ -365,7 +365,7 @@ method_b as (
     inner join pg_class pgc on pgix.indexname = pgc.relname and pgc.relkind = 'i' and pgc.relnatts = 1
     inner join pg_index pgi on pgi.indexrelid = pgc.oid
     inner join pg_attribute pga on pga.attrelid = pgi.indrelid and pga.attnum = ANY(pgi.indkey)
-    where pgi.indisunique = true
+    where pgi.indisunique = true and pgi.indpred is null
 ),
 results as (
     select * from method_a
@@ -390,7 +390,10 @@ select * from results;
 	return nil
 }
 
-func (p *PostgresDriver) ViewColumns(schema, tableName string, whitelist, blacklist []string) ([]drivers.Column, error) {
+func (p *PostgresDriver) ViewColumns(schema, tableName string, whitelist, blacklist []string) (
+	[]drivers.Column,
+	error,
+) {
 	return p.Columns(schema, tableName, whitelist, blacklist)
 }
 
@@ -601,7 +604,7 @@ func (p *PostgresDriver) Columns(schema, tableName string, whitelist, blacklist 
 			}
 		}
 	}
-	
+
 	if len(blacklist) > 0 {
 		cols := drivers.ColumnsFromList(blacklist, tableName)
 		if len(cols) > 0 {
