@@ -4,6 +4,6 @@ var TableNames = struct {
 	{{end}}{{end -}}
 }{
 	{{range $table := .Tables}}{{if not $table.IsView -}}
-	{{titleCase $table.Name}}: "{{$table.Name}}",
+	{{titleCase $table.Name}}: "{{$table.Name | $.SchemaTable}}",
 	{{end}}{{end -}}
 }
