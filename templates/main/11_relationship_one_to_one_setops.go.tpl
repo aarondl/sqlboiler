@@ -58,6 +58,7 @@ func (o *{{$ltable.UpSingular}}) Set{{$relAlias.Local}}GP({{if not $.NoContext}}
 // Adds o to related.R.{{$relAlias.Foreign}}.
 {{- end}}
 func (o *{{$ltable.UpSingular}}) Set{{$relAlias.Local}}({{if $.NoContext}}exec boil.Executor{{else}}ctx context.Context, exec boil.ContextExecutor{{end}}, insert bool, related *{{$ftable.UpSingular}}) error {
+	
 	var err error
 
 	if insert {
@@ -71,6 +72,11 @@ func (o *{{$ltable.UpSingular}}) Set{{$relAlias.Local}}({{if $.NoContext}}exec b
 			return errors.Wrap(err, "failed to insert into foreign table")
 		}
 	} else {
+		{{if not $.NoHooks -}}
+		if err = o.doBeforeUpdateHooks({{if not $.NoContext}}ctx, {{end -}} exec); err != nil {
+			return errors.Wrap(err, "failed to perform before update hooks")
+		}
+		{{end -}}
 		updateQuery := fmt.Sprintf(
 			"UPDATE {{$schemaForeignTable}} SET %s WHERE %s",
 			strmangle.SetParamNames("{{$.LQ}}", "{{$.RQ}}", {{if $.Dialect.UseIndexPlaceholders}}1{{else}}0{{end}}, []string{{"{"}}"{{.ForeignColumn}}"{{"}"}}),
@@ -103,6 +109,12 @@ func (o *{{$ltable.UpSingular}}) Set{{$relAlias.Local}}({{if $.NoContext}}exec b
 		related.{{$fcol}} = o.{{$col}}
 		{{- else -}}
 		queries.Assign(&related.{{$fcol}}, o.{{$col}})
+		{{- end}}
+
+		{{if not $.NoHooks -}}
+		if err := o.doAfterUpdateHooks({{if not $.NoContext}}ctx, {{end -}} exec); err != nil {
+			return errors.Wrap(err, "failed to perform after update hooks")
+		}
 		{{- end}}
 	}
 
