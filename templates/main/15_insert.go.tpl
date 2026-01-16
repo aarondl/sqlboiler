@@ -31,11 +31,28 @@ func (o *{{$alias.UpSingular}}) InsertGP({{if not .NoContext}}ctx context.Contex
 
 {{end -}}
 
+
+// SetCustomTableName sets the custom table name for insertion
+func (o *{{$alias.UpSingular}}) SetCustomTableName(tableName string) {
+	o.customTableName = tableName
+}
+
+func (o *{{$alias.UpSingular}}) getTableName() string {
+	if len(o.customTableName) > 0 {
+		return o.customTableName
+	}
+
+	return "{{.Table.Name}}"
+}
+
+
 // Insert a single record using an executor.
 // See boil.Columns.InsertColumnSet documentation to understand column list inference for inserts.
 func (o *{{$alias.UpSingular}}) Insert({{if .NoContext}}exec boil.Executor{{else}}ctx context.Context, exec boil.ContextExecutor{{end}}, columns boil.Columns) error {
+	var tableName = o.getTableName()
+
 	if o == nil {
-		return errors.New("{{.PkgName}}: no {{.Table.Name}} provided for insertion")
+		return errors.New("{{.PkgName}}: no " + tableName + " provided for insertion")
 	}
 
 	var err error
@@ -74,12 +91,12 @@ func (o *{{$alias.UpSingular}}) Insert({{if .NoContext}}exec boil.Executor{{else
 			return err
 		}
 		if len(wl) != 0 {
-			cache.query = fmt.Sprintf("INSERT INTO {{$schemaTable}} ({{.LQ}}%s{{.RQ}}) %%sVALUES (%s)%%s", strings.Join(wl, "{{.RQ}},{{.LQ}}"), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
+			cache.query = fmt.Sprintf("INSERT INTO {{.LQ}}%s{{.RQ}} ({{.LQ}}%s{{.RQ}}) %%sVALUES (%s)%%s", tableName, strings.Join(wl, "{{.RQ}},{{.LQ}}"), strmangle.Placeholders(dialect.UseIndexPlaceholders, len(wl), 1, 1))
 		} else {
 			{{if .Dialect.UseDefaultKeyword -}}
-			cache.query = "INSERT INTO {{$schemaTable}} %sDEFAULT VALUES%s"
+			cache.query = "INSERT INTO {{.LQ}}" + tableName + "{{.RQ}} %sDEFAULT VALUES%s"
 			{{else -}}
-			cache.query = "INSERT INTO {{$schemaTable}} () VALUES ()%s%s"
+			cache.query = "INSERT INTO {{.LQ}}" + tableName + "{{.RQ}} () VALUES ()%s%s"
 			{{end -}}
 		}
 
@@ -87,7 +104,8 @@ func (o *{{$alias.UpSingular}}) Insert({{if .NoContext}}exec boil.Executor{{else
 
 		if len(cache.retMapping) != 0 {
 			{{if .Dialect.UseLastInsertID -}}
-			cache.retQuery = fmt.Sprintf("SELECT {{.LQ}}%s{{.RQ}} FROM {{$schemaTable}} WHERE %s", strings.Join(returnColumns, "{{.RQ}},{{.LQ}}"), strmangle.WhereClause("{{.LQ}}", "{{.RQ}}", {{if .Dialect.UseIndexPlaceholders}}1{{else}}0{{end}}, {{$alias.DownSingular}}PrimaryKeyColumns))
+			cache.retQuery = fmt.Sprintf("SELECT {{.LQ}}%s{{.RQ}} FROM {{.LQ}}%s{{.RQ}} WHERE %s", strings.Join(returnColumns, "{{.RQ}},{{.LQ}}"), tableName,
+			    strmangle.WhereClause("{{.LQ}}", "{{.RQ}}", {{if .Dialect.UseIndexPlaceholders}}1{{else}}0{{end}}, {{$alias.DownSingular}}PrimaryKeyColumns))
 			{{else -}}
 				{{if .Dialect.UseOutputClause -}}
 			queryOutput = fmt.Sprintf("OUTPUT INSERTED.{{.LQ}}%s{{.RQ}} ", strings.Join(returnColumns, "{{.RQ}},INSERTED.{{.LQ}}"))
@@ -132,7 +150,7 @@ func (o *{{$alias.UpSingular}}) Insert({{if .NoContext}}exec boil.Executor{{else
 		{{end -}}
 	{{- end}}
 	if err != nil {
-		return errors.Wrap(err, "{{.PkgName}}: unable to insert into {{.Table.Name}}")
+		return errors.Wrap(err, "{{.PkgName}}: unable to insert into " + tableName)
 	}
 
 	{{if $canLastInsertID -}}
@@ -201,7 +219,7 @@ func (o *{{$alias.UpSingular}}) Insert({{if .NoContext}}exec boil.Executor{{else
 	}
 
 	if err != nil {
-		return errors.Wrap(err, "{{.PkgName}}: unable to insert into {{.Table.Name}}")
+		return errors.Wrap(err, "{{.PkgName}}: unable to insert into " + tableName)
 	}
 	{{end}}
 
