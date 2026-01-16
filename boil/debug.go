@@ -2,8 +2,11 @@ package boil
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
+	"regexp"
+	"strings"
 )
 
 // DebugMode is a flag controlling whether generated sql statements and
@@ -46,4 +49,39 @@ func DebugWriterFrom(ctx context.Context) io.Writer {
 		return writer
 	}
 	return DebugWriter
+}
+
+// PrintQuery prints a modified query string with placeholders replaced by their
+// corresponding argument values to writer.
+func PrintQuery(writer io.Writer, query string, args ...interface{}) {
+	substitutedQuery := substituteQueryArgs(query, args...)
+	fmt.Fprintln(writer, substitutedQuery)
+}
+
+// substituteQueryArgs takes a query string and an array of arguments.
+// It returns a modified query string with placeholders replaced by their
+// corresponding argument values.
+func substituteQueryArgs(query string, args ...interface{}) string {
+	// find all occurrences of placeholders ($1, $2, etc.) in the query
+	re := regexp.MustCompile(`\$\d+`)
+	matches := re.FindAllString(query, -1)
+
+	for i, match := range matches {
+		var arg string
+
+		switch v := args[i].(type) {
+		case string:
+			arg = fmt.Sprintf("'%s'", v)
+		case []byte:
+			arg = fmt.Sprintf("'%s'", string(v))
+		default:
+			arg = fmt.Sprintf("%v", v)
+		}
+
+		// replace the placeholder with the argument value
+		query = strings.Replace(query, match, arg, 1)
+	}
+
+	// return the final query with argument values
+	return query
 }
