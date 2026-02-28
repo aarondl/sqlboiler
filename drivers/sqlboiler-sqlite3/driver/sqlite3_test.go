@@ -12,14 +12,27 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"github.com/aarondl/sqlboiler/v4/drivers"
+	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 )
 
 var (
 	flagOverwriteGolden = flag.Bool("overwrite-golden", false, "Overwrite the golden file with the current execution results")
 )
+
+func createSQLiteDB(t *testing.T, path string, sql []byte) {
+	t.Helper()
+	out := &bytes.Buffer{}
+	cmd := exec.Command("sqlite3", path)
+	cmd.Stdout = out
+	cmd.Stderr = out
+	cmd.Stdin = bytes.NewReader(sql)
+	if err := cmd.Run(); err != nil {
+		t.Logf("sqlite output:\n%s\n", out.Bytes())
+		t.Fatal(err)
+	}
+}
 
 func TestDriver(t *testing.T) {
 	rand.New(rand.NewSource(time.Now().Unix()))
@@ -29,19 +42,21 @@ func TestDriver(t *testing.T) {
 	}
 
 	tmpName := filepath.Join(os.TempDir(), fmt.Sprintf("sqlboiler-sqlite3-%d.sql", rand.Int()))
-
-	out := &bytes.Buffer{}
-	createDB := exec.Command("sqlite3", tmpName)
-	createDB.Stdout = out
-	createDB.Stderr = out
-	createDB.Stdin = bytes.NewReader(b)
-
+	createSQLiteDB(t, tmpName, b)
 	t.Log("sqlite file:", tmpName)
-	if err := createDB.Run(); err != nil {
-		t.Logf("sqlite output:\n%s\n", out.Bytes())
+
+	cwd, err := os.Getwd()
+	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("sqlite output:\n%s\n", out.Bytes())
+	relName, err := filepath.Rel(cwd, tmpName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	localName := fmt.Sprintf("./sqlboiler-sqlite3-local-%d.sql", rand.Int())
+	createSQLiteDB(t, localName, b)
+	t.Cleanup(func() { os.Remove(localName) })
 
 	tests := []struct {
 		name       string
@@ -49,9 +64,23 @@ func TestDriver(t *testing.T) {
 		goldenJson string
 	}{
 		{
-			name: "default",
+			name: "absolute_path",
 			config: drivers.Config{
 				"dbname": tmpName,
+			},
+			goldenJson: "sqlite3.golden.json",
+		},
+		{
+			name: "relative_path",
+			config: drivers.Config{
+				"dbname": relName,
+			},
+			goldenJson: "sqlite3.golden.json",
+		},
+		{
+			name: "relative_path_dot_slash",
+			config: drivers.Config{
+				"dbname": localName,
 			},
 			goldenJson: "sqlite3.golden.json",
 		},

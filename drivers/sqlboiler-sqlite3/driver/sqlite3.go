@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"strings"
 
 	_ "modernc.org/sqlite"
@@ -73,6 +74,13 @@ func (s SQLiteDriver) Assemble(config drivers.Config) (dbinfo *drivers.DBInfo, e
 	whitelist, _ := config.StringSlice(drivers.ConfigWhitelist)
 	blacklist, _ := config.StringSlice(drivers.ConfigBlacklist)
 	concurrency := config.DefaultInt(drivers.ConfigConcurrency, drivers.DefaultConcurrency)
+
+	if !filepath.IsAbs(dbname) {
+		dbname, err = filepath.Abs(dbname)
+		if err != nil {
+			return nil, fmt.Errorf("sqlboiler-sqlite failed to resolve database path: %w", err)
+		}
+	}
 
 	s.connStr = SQLiteBuildQueryString(dbname)
 	s.configForeignKeys = config.MustForeignKeys(drivers.ConfigForeignKeys)
