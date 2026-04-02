@@ -936,3 +936,133 @@ func TestUnTitleCase(t *testing.T) {
 		}
 	}
 }
+
+// TestBindStructRowsError tests that bind returns the underlying connection
+// error instead of sql.ErrNoRows when rows.Next() returns false due to an I/O
+// failure. RowError(0, ...) causes the first Next() call to return false with
+// the error stored in rows.Err(), simulating a connection drop before any row
+// is read. Without checking rows.Err(), bind sees foundOne==false and
+// incorrectly returns sql.ErrNoRows.
+func TestBindStructRowsError(t *testing.T) {
+	t.Parallel()
+
+	testResults := struct {
+		ID   int
+		Name string `boil:"test"`
+	}{}
+
+	query := &Query{
+		from:    []string{"fun"},
+		dialect: &drivers.Dialect{LQ: '"', RQ: '"', UseIndexPlaceholders: true},
+	}
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Error(err)
+	}
+
+	connErr := fmt.Errorf("connection reset by peer")
+	ret := sqlmock.NewRows([]string{"id", "test"}).
+		AddRow(driver.Value(int64(35)), driver.Value("pat")).
+		RowError(0, connErr)
+	mock.ExpectQuery(`SELECT \* FROM "fun";`).WillReturnRows(ret)
+
+	err = query.Bind(context.Background(), db, &testResults)
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	if err == sql.ErrNoRows {
+		t.Error("got sql.ErrNoRows, want the underlying connection error")
+	}
+	if err != nil && !strings.Contains(err.Error(), "connection reset by peer") {
+		t.Error("error did not contain expected message, got:", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// TestBindSliceRowsError tests that bind returns an error instead of silently
+// returning a partial result set when a connection error occurs mid-iteration.
+// Two rows are added but RowError(1, ...) causes the second Next() call to
+// fail. Without checking rows.Err() after the loop, bind returns nil with only
+// one row in the slice — the caller has no way to know the result is incomplete.
+func TestBindSliceRowsError(t *testing.T) {
+	t.Parallel()
+
+	testResults := []struct {
+		ID   int
+		Name string `boil:"test"`
+	}{}
+
+	query := &Query{
+		from:    []string{"fun"},
+		dialect: &drivers.Dialect{LQ: '"', RQ: '"', UseIndexPlaceholders: true},
+	}
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Error(err)
+	}
+
+	connErr := fmt.Errorf("connection reset by peer")
+	ret := sqlmock.NewRows([]string{"id", "test"}).
+		AddRow(driver.Value(int64(35)), driver.Value("pat")).
+		AddRow(driver.Value(int64(12)), driver.Value("cat")).
+		RowError(1, connErr)
+	mock.ExpectQuery(`SELECT \* FROM "fun";`).WillReturnRows(ret)
+
+	err = query.Bind(context.Background(), db, &testResults)
+	if err == nil {
+		t.Error("expected error from connection failure during iteration, got nil")
+	}
+	if err != nil && !strings.Contains(err.Error(), "connection reset by peer") {
+		t.Error("error did not contain expected message, got:", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// TestBindPtrSliceRowsError tests the same rows.Err() behavior for pointer
+// slice binding. RowError(0, ...) causes the first Next() to fail, so the
+// slice stays empty. Without checking rows.Err(), bind returns nil and the
+// caller receives an empty slice with no indication that an error occurred.
+func TestBindPtrSliceRowsError(t *testing.T) {
+	t.Parallel()
+
+	testResults := []*struct {
+		ID   int
+		Name string `boil:"test"`
+	}{}
+
+	query := &Query{
+		from:    []string{"fun"},
+		dialect: &drivers.Dialect{LQ: '"', RQ: '"', UseIndexPlaceholders: true},
+	}
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Error(err)
+	}
+
+	connErr := fmt.Errorf("connection reset by peer")
+	ret := sqlmock.NewRows([]string{"id", "test"}).
+		AddRow(driver.Value(int64(35)), driver.Value("pat")).
+		RowError(0, connErr)
+	mock.ExpectQuery(`SELECT \* FROM "fun";`).WillReturnRows(ret)
+
+	err = query.Bind(context.Background(), db, &testResults)
+	if err == nil {
+		t.Error("expected error from connection failure, got nil")
+	}
+	if err != nil && !strings.Contains(err.Error(), "connection reset by peer") {
+		t.Error("error did not contain expected message, got:", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}

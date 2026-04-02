@@ -270,6 +270,10 @@ Rows:
 		}
 	}
 
+	if err := rows.Err(); err != nil {
+		return errors.Wrap(err, "failed to iterate rows")
+	}
+
 	if bkind == kindStruct && !foundOne {
 		return sql.ErrNoRows
 	}
