@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/require"
 	"github.com/aarondl/sqlboiler/v4/drivers"
 )
@@ -141,4 +142,85 @@ func TestDriver(t *testing.T) {
 		}
 		require.False(t, found, "blacklisted column 'string_three' should not be present in table 'magic'")
 	})
+}
+
+// TestTableNames_RowsErr verifies that TableNames propagates errors returned
+// by rows.Err() after the row-iteration loop. A RowError on the first row
+// simulates a mid-iteration failure (e.g. a dropped connection) and the test
+// asserts that the caller receives the underlying error instead of a nil.
+func TestTableNames_RowsErr(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	simulatedErr := fmt.Errorf("simulated row iteration error")
+
+	rows := sqlmock.NewRows([]string{"table_name"}).
+		AddRow("table1").
+		RowError(0, simulatedErr)
+
+	mock.ExpectQuery(`select table_name from information_schema\.tables`).
+		WithArgs("testschema").
+		WillReturnRows(rows)
+
+	m := &MySQLDriver{conn: db}
+	_, err = m.TableNames("testschema", nil, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "simulated row iteration error")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestViewNames_RowsErr verifies that ViewNames propagates errors returned
+// by rows.Err() after the row-iteration loop. A RowError on the first row
+// simulates a mid-iteration failure and the test asserts that the caller
+// receives the underlying error instead of a nil.
+func TestViewNames_RowsErr(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	simulatedErr := fmt.Errorf("simulated row iteration error")
+
+	rows := sqlmock.NewRows([]string{"table_name"}).
+		AddRow("view1").
+		RowError(0, simulatedErr)
+
+	mock.ExpectQuery(`select table_name from information_schema\.views`).
+		WithArgs("testschema").
+		WillReturnRows(rows)
+
+	m := &MySQLDriver{conn: db}
+	_, err = m.ViewNames("testschema", nil, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "simulated row iteration error")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestColumns_RowsErr verifies that Columns propagates errors returned by
+// rows.Err() after the row-iteration loop. A RowError on the first row
+// simulates a mid-iteration failure and the test asserts that the caller
+// receives the underlying error instead of a nil.
+func TestColumns_RowsErr(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	simulatedErr := fmt.Errorf("simulated row iteration error")
+
+	rows := sqlmock.NewRows([]string{
+		"column_name", "column_type", "column_comment", "data_type",
+		"column_default", "is_nullable", "is_generated", "is_unique",
+	}).
+		AddRow("id", "int", "", "int", nil, false, false, true).
+		RowError(0, simulatedErr)
+
+	mock.ExpectQuery(`select\s+c\.column_name`).
+		WithArgs("test_table", "test_table", "testschema", "testschema", "testschema", "testschema", "test_table", "test_table", "testschema").
+		WillReturnRows(rows)
+
+	m := &MySQLDriver{conn: db}
+	_, err = m.Columns("testschema", "test_table", nil, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "simulated row iteration error")
+	require.NoError(t, mock.ExpectationsWereMet())
 }

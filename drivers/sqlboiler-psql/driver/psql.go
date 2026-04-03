@@ -223,6 +223,10 @@ func (p *PostgresDriver) TableNames(schema string, whitelist, blacklist []string
 		names = append(names, name)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return names, nil
 }
 
@@ -279,6 +283,10 @@ func (p *PostgresDriver) ViewNames(schema string, whitelist, blacklist []string)
 		}
 
 		names = append(names, name)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return names, nil
@@ -387,6 +395,11 @@ select * from results;
 		}
 		p.uniqueColumns.Store(c, struct{}{})
 	}
+
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -659,6 +672,10 @@ func (p *PostgresDriver) Columns(schema, tableName string, whitelist, blacklist 
 		}
 
 		columns = append(columns, column)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return columns, nil

@@ -172,6 +172,9 @@ func (s SQLiteDriver) TableNames(schema string, whitelist, blacklist []string) (
 			names = append(names, name)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	return names, nil
 }
@@ -218,6 +221,9 @@ func (s SQLiteDriver) ViewNames(schema string, whitelist, blacklist []string) ([
 		if name != "sqlite_sequence" {
 			names = append(names, name)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return names, nil
@@ -276,6 +282,9 @@ func (s SQLiteDriver) tableInfo(tableName string) ([]*sqliteTableInfo, error) {
 
 		ret = append(ret, tinfo)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return ret, nil
 }
 
@@ -306,9 +315,16 @@ func (s SQLiteDriver) indexes(tableName string) ([]*sqliteIndex, error) {
 			}
 			columns = append(columns, colName)
 		}
+		if err := rowsColumns.Err(); err != nil {
+			rowsColumns.Close()
+			return nil, err
+		}
 		rowsColumns.Close()
 		idx.Columns = columns
 		ret = append(ret, idx)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return ret, nil
 }
