@@ -26,11 +26,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/aarondl/sqlboiler/v4/drivers"
 )
 
@@ -138,4 +140,109 @@ func TestDriver(t *testing.T) {
 			t.Errorf("blacklisted column 'string_three' should not be present in table 'magic'")
 		}
 	})
+}
+
+// TestTableNames_RowsErr verifies that TableNames checks rows.Err() after
+// iterating and propagates any error encountered during row iteration back
+// to the caller rather than silently returning partial results.
+func TestTableNames_RowsErr(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	simulatedErr := fmt.Errorf("rows iteration error")
+
+	rows := sqlmock.NewRows([]string{"table_name"}).
+		AddRow("table1").
+		RowError(0, simulatedErr)
+
+	mock.ExpectQuery(`SELECT table_name`).
+		WithArgs("dbo").
+		WillReturnRows(rows)
+
+	driver := &MSSQLDriver{conn: db}
+	_, err = driver.TableNames("dbo", nil, nil)
+	if err == nil {
+		t.Fatal("expected error from rows.Err(), got nil")
+	}
+	if err.Error() != simulatedErr.Error() {
+		t.Errorf("expected error %q, got %q", simulatedErr, err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %s", err)
+	}
+}
+
+// TestViewNames_RowsErr verifies that ViewNames checks rows.Err() after
+// iterating and propagates any error encountered during row iteration back
+// to the caller rather than silently returning partial results.
+func TestViewNames_RowsErr(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	simulatedErr := fmt.Errorf("rows iteration error")
+
+	rows := sqlmock.NewRows([]string{"table_name"}).
+		AddRow("view1").
+		RowError(0, simulatedErr)
+
+	mock.ExpectQuery(`select table_name`).
+		WithArgs("dbo").
+		WillReturnRows(rows)
+
+	driver := &MSSQLDriver{conn: db}
+	_, err = driver.ViewNames("dbo", nil, nil)
+	if err == nil {
+		t.Fatal("expected error from rows.Err(), got nil")
+	}
+	if err.Error() != simulatedErr.Error() {
+		t.Errorf("expected error %q, got %q", simulatedErr, err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %s", err)
+	}
+}
+
+// TestColumns_RowsErr verifies that Columns checks rows.Err() after iterating
+// and propagates any error encountered during row iteration back to the caller
+// rather than silently returning partial results.
+func TestColumns_RowsErr(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	simulatedErr := fmt.Errorf("rows iteration error")
+
+	rows := sqlmock.NewRows([]string{
+		"column_name", "full_type", "data_type", "column_default",
+		"is_nullable", "is_unique", "is_identity", "is_computed",
+	}).
+		AddRow("id", "int", "int", nil, false, true, true, false).
+		RowError(0, simulatedErr)
+
+	mock.ExpectQuery(`SELECT column_name`).
+		WithArgs("dbo", "test_table").
+		WillReturnRows(rows)
+
+	driver := &MSSQLDriver{conn: db}
+	_, err = driver.Columns("dbo", "test_table", nil, nil)
+	if err == nil {
+		t.Fatal("expected error from rows.Err(), got nil")
+	}
+	if err.Error() != simulatedErr.Error() {
+		t.Errorf("expected error %q, got %q", simulatedErr, err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %s", err)
+	}
 }

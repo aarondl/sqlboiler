@@ -222,6 +222,9 @@ func (m *MySQLDriver) TableNames(schema string, whitelist, blacklist []string) (
 		}
 		names = append(names, name)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	return names, nil
 }
@@ -268,6 +271,9 @@ func (m *MySQLDriver) ViewNames(schema string, whitelist, blacklist []string) ([
 		}
 
 		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return names, nil
@@ -380,6 +386,9 @@ func (m *MySQLDriver) Columns(schema, tableName string, whitelist, blacklist []s
 		}
 
 		columns = append(columns, column)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return columns, nil
