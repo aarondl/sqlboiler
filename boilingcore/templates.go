@@ -13,8 +13,8 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
-	"github.com/friendsofgo/errors"
 	"github.com/aarondl/strmangle"
+	"github.com/friendsofgo/errors"
 
 	"github.com/aarondl/sqlboiler/v4/drivers"
 )
@@ -348,6 +348,37 @@ var templateFunctions = template.FuncMap{
 	"getTable":               drivers.GetTable,
 }
 
+// camelCaseNoInitialisms converts a snake_case string to camelCase for struct
+// tags. Unlike strmangle.CamelCase, it does not uppercase common Go initialisms
+// such as "ID" or "URL". For example, "account_id" becomes "accountId" instead
+// of "accountID", following the conventional camelCase used in JSON APIs.
+func camelCaseNoInitialisms(name string) string {
+	if name == "" {
+		return ""
+	}
+
+	buf := strmangle.GetBuffer()
+	defer strmangle.PutBuffer(buf)
+
+	firstWritten := false
+	for _, word := range strings.Split(name, "_") {
+		if word == "" {
+			continue
+		}
+		if !firstWritten {
+			buf.WriteString(strings.ToLower(word))
+			firstWritten = true
+		} else {
+			buf.WriteString(strings.ToUpper(word[:1]))
+			if len(word) > 1 {
+				buf.WriteString(strings.ToLower(word[1:]))
+			}
+		}
+	}
+
+	return buf.String()
+}
+
 func generateTagWithCase(tagName, tagValue, alias string, c TagCase, nullable bool) string {
 	buf := strmangle.GetBuffer()
 	defer strmangle.PutBuffer(buf)
@@ -361,7 +392,7 @@ func generateTagWithCase(tagName, tagValue, alias string, c TagCase, nullable bo
 	case TagCaseTitle:
 		buf.WriteString(strmangle.TitleCase(tagValue))
 	case TagCaseCamel:
-		buf.WriteString(strmangle.CamelCase(tagValue))
+		buf.WriteString(camelCaseNoInitialisms(tagValue))
 	case TagCaseAlias:
 		buf.WriteString(alias)
 	default:

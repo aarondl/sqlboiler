@@ -35,6 +35,58 @@ func TestTemplateNameListSort(t *testing.T) {
 	}
 }
 
+func TestCamelCaseNoInitialisms(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"account_id", "accountId"},
+		{"user_name", "userName"},
+		{"http_url", "httpUrl"},
+		{"first_last_name", "firstLastName"},
+		{"id", "id"},
+		{"column_name_id", "columnNameId"},
+		{"", ""},
+		{"single", "single"},
+		{"a_b_c", "aBC"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := camelCaseNoInitialisms(tt.input)
+			if got != tt.expected {
+				t.Errorf("camelCaseNoInitialisms(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGenerateTagWithCaseCamel(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"account_id", `json:"accountId" `},
+		{"user_name", `json:"userName" `},
+		{"http_url", `json:"httpUrl" `},
+		{"id", `json:"id" `},
+		{"column_name_id", `json:"columnNameId" `},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := generateTagWithCase("json", tt.input, tt.input, TagCaseCamel, false)
+			if got != tt.expected {
+				t.Errorf("generateTagWithCase(%q, camel) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestTemplateList_Templates(t *testing.T) {
 	t.Parallel()
 
