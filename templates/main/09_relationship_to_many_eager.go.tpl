@@ -175,7 +175,6 @@ func ({{$ltable.DownSingular}}L) Load{{$relAlias.Local}}({{if $.NoContext}}e boi
 				}
 				foreign.R.{{$relAlias.Foreign}} = append(foreign.R.{{$relAlias.Foreign}}, local)
 				{{end -}}
-				break
 			}
 		}
 	}
@@ -194,7 +193,6 @@ func ({{$ltable.DownSingular}}L) Load{{$relAlias.Local}}({{if $.NoContext}}e boi
 				}
 				foreign.R.{{$relAlias.Foreign}} = local
 				{{end -}}
-				break
 			}
 		}
 	}
