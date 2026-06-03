@@ -138,26 +138,50 @@ func ({{$ltable.DownSingular}}L) Load{{$rel.Foreign}}({{if $.NoContext}}e boil.E
 		return nil
 	}
 
-	for _, local := range slice {
-		for _, foreign := range resultSlice {
-			{{if $usesPrimitives -}}
-			if local.{{$col}} == foreign.{{$fcol}} {
-			{{else -}}
-			if queries.Equal(local.{{$col}}, foreign.{{$fcol}}) {
-			{{end -}}
-				local.R.{{$rel.Foreign}} = foreign
-				{{if not $.NoBackReferencing -}}
-				if foreign.R == nil {
-					foreign.R = &{{$ftable.DownSingular}}R{}
-				}
-					{{if $fkey.Unique -}}
-				foreign.R.{{$rel.Local}} = local
-					{{else -}}
-				foreign.R.{{$rel.Local}} = append(foreign.R.{{$rel.Local}}, local)
-					{{end -}}
-				{{end -}}
-				break
+	resultMap := make(map[string]*{{$ftable.UpSingular}})
+	for _, r := range resultSlice {
+		{{if $usesPrimitives -}}
+		resultMap[fmt.Sprintf("%v", r.{{$fcol}})] = r
+		{{else -}}
+		if valuer, ok := any(r.{{$fcol}}).(Valuer); ok {
+			val, _ := valuer.Value()
+			if val != nil {
+				resultMap[fmt.Sprintf("%v", val)] = r
 			}
+		} else {
+			resultMap[fmt.Sprintf("%v", r.{{$fcol}})] = r
+		}
+		{{end -}}
+	}
+
+	for _, local := range slice {
+		var localKey string
+		{{if $usesPrimitives -}}
+		localKey = fmt.Sprintf("%v", local.{{$col}})
+		{{else -}}
+		if valuer, ok := any(local.{{$col}}).(Valuer); ok {
+			val, _ := valuer.Value()
+			if val == nil {
+				continue
+			}
+			localKey = fmt.Sprintf("%v", val)
+		} else {
+			localKey = fmt.Sprintf("%v", local.{{$col}})
+		}
+		{{end -}}
+
+		if foreign, ok := resultMap[localKey]; ok {
+			local.R.{{$rel.Foreign}} = foreign
+			{{if not $.NoBackReferencing -}}
+			if foreign.R == nil {
+				foreign.R = &{{$ftable.DownSingular}}R{}
+			}
+			{{if $fkey.Unique -}}
+			foreign.R.{{$rel.Local}} = local
+			{{else -}}
+			foreign.R.{{$rel.Local}} = append(foreign.R.{{$rel.Local}}, local)
+			{{end -}}
+			{{end -}}
 		}
 	}
 
