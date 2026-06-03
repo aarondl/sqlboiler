@@ -99,11 +99,12 @@ func ({{$ltable.DownSingular}}L) Load{{$relAlias.Local}}({{if $.NoContext}}e boi
 	}
 
 	var resultSlice []*{{$ftable.UpSingular}}
+	resultMap := make(map[string][]*{{$ftable.UpSingular}})
+
 	{{if .ToJoinTable -}}
 	{{- $foreignTable := getTable $.Tables .ForeignTable -}}
 	{{- $joinTable := getTable $.Tables .JoinTable -}}
 	{{- $localCol := $joinTable.GetColumn .JoinLocalColumn}}
-	var localJoinCols []{{$localCol.Type}}
 	for results.Next() {
 		one := new({{$ftable.UpSingular}})
 		var localJoinCol {{$localCol.Type}}
@@ -117,11 +118,26 @@ func ({{$ltable.DownSingular}}L) Load{{$relAlias.Local}}({{if $.NoContext}}e boi
 		}
 
 		resultSlice = append(resultSlice, one)
-		localJoinCols = append(localJoinCols, localJoinCol)
+		resultMap[fmt.Sprintf("%v", localJoinCol)] = append(resultMap[fmt.Sprintf("%v", localJoinCol)], one)
 	}
 	{{- else -}}
 	if err = queries.Bind(results, &resultSlice); err != nil {
 		return errors.Wrap(err, "failed to bind eager loaded slice {{.ForeignTable}}")
+	}
+
+	for _, r := range resultSlice {
+		{{if $usesPrimitives -}}
+		resultMap[fmt.Sprintf("%v", r.{{$fcol}})] = append(resultMap[fmt.Sprintf("%v", r.{{$fcol}})], r)
+		{{else -}}
+		if valuer, ok := any(r.{{$fcol}}).(Valuer); ok {
+			val, _ := valuer.Value()
+			if val != nil {
+				resultMap[fmt.Sprintf("%v", val)] = append(resultMap[fmt.Sprintf("%v", val)], r)
+			}
+		} else {
+			resultMap[fmt.Sprintf("%v", r.{{$fcol}})] = append(resultMap[fmt.Sprintf("%v", r.{{$fcol}})], r)
+		}
+		{{end -}}
 	}
 	{{- end}}
 
@@ -159,46 +175,42 @@ func ({{$ltable.DownSingular}}L) Load{{$relAlias.Local}}({{if $.NoContext}}e boi
 		return nil
 	}
 
-	{{if .ToJoinTable -}}
-	for i, foreign := range resultSlice {
-		localJoinCol := localJoinCols[i]
-		for _, local := range slice {
-			{{if $usesPrimitives -}}
-			if local.{{$col}} == localJoinCol {
-			{{else -}}
-			if queries.Equal(local.{{$col}}, localJoinCol) {
-			{{end -}}
-				local.R.{{$relAlias.Local}} = append(local.R.{{$relAlias.Local}}, foreign)
-				{{if not $.NoBackReferencing -}}
-				if foreign.R == nil {
-					foreign.R = &{{$ftable.DownSingular}}R{}
-				}
-				foreign.R.{{$relAlias.Foreign}} = append(foreign.R.{{$relAlias.Foreign}}, local)
-				{{end -}}
-				break
+	for _, local := range slice {
+		var localKey string
+		{{if $usesPrimitives -}}
+		localKey = fmt.Sprintf("%v", local.{{$col}})
+		{{else -}}
+		if valuer, ok := any(local.{{$col}}).(Valuer); ok {
+			val, _ := valuer.Value()
+			if val == nil {
+				continue
 			}
+			localKey = fmt.Sprintf("%v", val)
+		} else {
+			localKey = fmt.Sprintf("%v", local.{{$col}})
 		}
-	}
-	{{else -}}
-	for _, foreign := range resultSlice {
-		for _, local := range slice {
-			{{if $usesPrimitives -}}
-			if local.{{$col}} == foreign.{{$fcol}} {
-			{{else -}}
-			if queries.Equal(local.{{$col}}, foreign.{{$fcol}}) {
-			{{end -}}
-				local.R.{{$relAlias.Local}} = append(local.R.{{$relAlias.Local}}, foreign)
-				{{if not $.NoBackReferencing -}}
-				if foreign.R == nil {
-					foreign.R = &{{$ftable.DownSingular}}R{}
-				}
-				foreign.R.{{$relAlias.Foreign}} = local
-				{{end -}}
-				break
+		{{end -}}
+
+		others := resultMap[localKey]
+		if len(others) == 0 {
+			continue
+		}
+
+		local.R.{{$relAlias.Local}} = append(local.R.{{$relAlias.Local}}, others...)
+
+		{{if not $.NoBackReferencing -}}
+		for _, foreign := range others {
+			if foreign.R == nil {
+				foreign.R = &{{$ftable.DownSingular}}R{}
 			}
+			{{if .ToJoinTable -}}
+			foreign.R.{{$relAlias.Foreign}} = append(foreign.R.{{$relAlias.Foreign}}, local)
+			{{else -}}
+			foreign.R.{{$relAlias.Foreign}} = local
+			{{end -}}
 		}
+		{{end -}}
 	}
-	{{end}}
 
 	return nil
 }
