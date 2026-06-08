@@ -1,3 +1,6 @@
+// Valuer is a type alias for database/sql/driver used for type assertion (e.g. in eager loading optimization).
+type Valuer = driver.Valuer
+
 // M type is for providing columns and column values to UpdateAll.
 type M map[string]any
 

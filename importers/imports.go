@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cast"
 
-	"github.com/friendsofgo/errors"
 	"github.com/aarondl/strmangle"
+	"github.com/friendsofgo/errors"
 )
 
 // Collection of imports for various templating purposes
@@ -223,6 +223,7 @@ func NewDefaultImports() Collection {
 		"boil_types": {
 			Standard: List{
 				`"strconv"`,
+				`"database/sql/driver"`,
 			},
 			ThirdParty: List{
 				`"github.com/friendsofgo/errors"`,
