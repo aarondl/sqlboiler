@@ -34,3 +34,21 @@ func TestSkipTimestamps(t *testing.T) {
 		t.Error("they should be skipped")
 	}
 }
+
+func TestHooksAreSkippedWrongType(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.WithValue(context.Background(), ctxSkipHooks, "yes")
+	if HooksAreSkipped(ctx) {
+		t.Error("expected false when context value is wrong type")
+	}
+}
+
+func TestTimestampsAreSkippedWrongType(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.WithValue(context.Background(), ctxSkipTimestamps, "yes")
+	if TimestampsAreSkipped(ctx) {
+		t.Error("expected false when context value is wrong type")
+	}
+}

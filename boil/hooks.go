@@ -10,8 +10,8 @@ func SkipHooks(ctx context.Context) context.Context {
 
 // HooksAreSkipped returns true if the context skips hooks
 func HooksAreSkipped(ctx context.Context) bool {
-	skip := ctx.Value(ctxSkipHooks)
-	return skip != nil && skip.(bool)
+	skip, ok := ctx.Value(ctxSkipHooks).(bool)
+	return ok && skip
 }
 
 // SkipTimestamps modifies a context to prevent hooks from running for any query
@@ -22,8 +22,8 @@ func SkipTimestamps(ctx context.Context) context.Context {
 
 // TimestampsAreSkipped returns true if the context skips hooks
 func TimestampsAreSkipped(ctx context.Context) bool {
-	skip := ctx.Value(ctxSkipTimestamps)
-	return skip != nil && skip.(bool)
+	skip, ok := ctx.Value(ctxSkipTimestamps).(bool)
+	return ok && skip
 }
 
 // HookPoint is the point in time at which we hook
