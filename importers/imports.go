@@ -222,6 +222,7 @@ func NewDefaultImports() Collection {
 		},
 		"boil_types": {
 			Standard: List{
+				`"fmt"`,
 				`"strconv"`,
 				`"database/sql/driver"`,
 			},

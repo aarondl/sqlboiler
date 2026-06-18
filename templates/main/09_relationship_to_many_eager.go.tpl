@@ -78,12 +78,12 @@ func ({{$ltable.DownSingular}}L) Load{{$relAlias.Local}}({{if $.NoContext}}e boi
 	)
 		{{else -}}
 	query := NewQuery(
-	    qm.From(`{{if $.Dialect.UseSchema}}{{$.Schema}}.{{end}}{{.ForeignTable}}`),
-	    qm.WhereIn(`{{if $.Dialect.UseSchema}}{{$.Schema}}.{{end}}{{.ForeignTable}}.{{.ForeignColumn}} in ?`, argsSlice...),
-	    {{if and $.AddSoftDeletes $canSoftDelete -}}
-	    qmhelper.WhereIsNull(`{{if $.Dialect.UseSchema}}{{$.Schema}}.{{end}}{{.ForeignTable}}.{{or $.AutoColumns.Deleted "deleted_at"}}`),
-	    {{- end}}
-    )
+		qm.From(`{{if $.Dialect.UseSchema}}{{$.Schema}}.{{end}}{{.ForeignTable}}`),
+		qm.WhereIn(`{{if $.Dialect.UseSchema}}{{$.Schema}}.{{end}}{{.ForeignTable}}.{{.ForeignColumn}} in ?`, argsSlice...),
+		{{if and $.AddSoftDeletes $canSoftDelete -}}
+		qmhelper.WhereIsNull(`{{if $.Dialect.UseSchema}}{{$.Schema}}.{{end}}{{.ForeignTable}}.{{or $.AutoColumns.Deleted "deleted_at"}}`),
+		{{- end}}
+	)
 		{{end -}}
 	if mods != nil {
 		mods.Apply(query)
@@ -126,18 +126,8 @@ func ({{$ltable.DownSingular}}L) Load{{$relAlias.Local}}({{if $.NoContext}}e boi
 	}
 
 	for _, r := range resultSlice {
-		{{if $usesPrimitives -}}
-		resultMap[fmt.Sprintf("%v", r.{{$fcol}})] = append(resultMap[fmt.Sprintf("%v", r.{{$fcol}})], r)
-		{{else -}}
-		if valuer, ok := any(r.{{$fcol}}).(Valuer); ok {
-			val, _ := valuer.Value()
-			if val != nil {
-				resultMap[fmt.Sprintf("%v", val)] = append(resultMap[fmt.Sprintf("%v", val)], r)
-			}
-		} else {
-			resultMap[fmt.Sprintf("%v", r.{{$fcol}})] = append(resultMap[fmt.Sprintf("%v", r.{{$fcol}})], r)
-		}
-		{{end -}}
+		key := generateMapKey(r.{{$fcol}})
+		resultMap[key] = append(resultMap[key], r)
 	}
 	{{- end}}
 
@@ -176,22 +166,7 @@ func ({{$ltable.DownSingular}}L) Load{{$relAlias.Local}}({{if $.NoContext}}e boi
 	}
 
 	for _, local := range slice {
-		var localKey string
-		{{if $usesPrimitives -}}
-		localKey = fmt.Sprintf("%v", local.{{$col}})
-		{{else -}}
-		if valuer, ok := any(local.{{$col}}).(Valuer); ok {
-			val, _ := valuer.Value()
-			if val == nil {
-				continue
-			}
-			localKey = fmt.Sprintf("%v", val)
-		} else {
-			localKey = fmt.Sprintf("%v", local.{{$col}})
-		}
-		{{end -}}
-
-		others := resultMap[localKey]
+		others := resultMap[generateMapKey(local.{{$col}})]
 		if len(others) == 0 {
 			continue
 		}

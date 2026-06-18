@@ -65,12 +65,12 @@ func ({{$ltable.DownSingular}}L) Load{{$relAlias.Local}}({{if $.NoContext}}e boi
 	}
 
 	query := NewQuery(
-	    qm.From(`{{if $.Dialect.UseSchema}}{{$.Schema}}.{{end}}{{.ForeignTable}}`),
-        qm.WhereIn(`{{if $.Dialect.UseSchema}}{{$.Schema}}.{{end}}{{.ForeignTable}}.{{.ForeignColumn}} in ?`, argsSlice...),
-	    {{if and $.AddSoftDeletes $canSoftDelete -}}
-	    qmhelper.WhereIsNull(`{{if $.Dialect.UseSchema}}{{$.Schema}}.{{end}}{{.ForeignTable}}.{{or $.AutoColumns.Deleted "deleted_at"}}`),
-	    {{- end}}
-    )
+		qm.From(`{{if $.Dialect.UseSchema}}{{$.Schema}}.{{end}}{{.ForeignTable}}`),
+		qm.WhereIn(`{{if $.Dialect.UseSchema}}{{$.Schema}}.{{end}}{{.ForeignTable}}.{{.ForeignColumn}} in ?`, argsSlice...),
+		{{if and $.AddSoftDeletes $canSoftDelete -}}
+		qmhelper.WhereIsNull(`{{if $.Dialect.UseSchema}}{{$.Schema}}.{{end}}{{.ForeignTable}}.{{or $.AutoColumns.Deleted "deleted_at"}}`),
+		{{- end}}
+	)
 	if mods != nil {
 		mods.Apply(query)
 	}
@@ -124,37 +124,11 @@ func ({{$ltable.DownSingular}}L) Load{{$relAlias.Local}}({{if $.NoContext}}e boi
 
 	resultMap := make(map[string]*{{$ftable.UpSingular}})
 	for _, r := range resultSlice {
-		{{if $usesPrimitives -}}
-		resultMap[fmt.Sprintf("%v", r.{{$fcol}})] = r
-		{{else -}}
-		if valuer, ok := any(r.{{$fcol}}).(Valuer); ok {
-			val, _ := valuer.Value()
-			if val != nil {
-				resultMap[fmt.Sprintf("%v", val)] = r
-			}
-		} else {
-			resultMap[fmt.Sprintf("%v", r.{{$fcol}})] = r
-		}
-		{{end -}}
+		resultMap[generateMapKey(r.{{$fcol}})] = r
 	}
 
 	for _, local := range slice {
-		var localKey string
-		{{if $usesPrimitives -}}
-		localKey = fmt.Sprintf("%v", local.{{$col}})
-		{{else -}}
-		if valuer, ok := any(local.{{$col}}).(Valuer); ok {
-			val, _ := valuer.Value()
-			if val == nil {
-				continue
-			}
-			localKey = fmt.Sprintf("%v", val)
-		} else {
-			localKey = fmt.Sprintf("%v", local.{{$col}})
-		}
-		{{end -}}
-
-		if foreign, ok := resultMap[localKey]; ok {
+		if foreign, ok := resultMap[generateMapKey(local.{{$col}})]; ok {
 			local.R.{{$relAlias.Local}} = foreign
 			{{if not $.NoBackReferencing -}}
 			if foreign.R == nil {
