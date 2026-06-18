@@ -1,6 +1,3 @@
-// Valuer is a type alias for database/sql/driver used for type assertion (e.g. in eager loading optimization).
-type Valuer = driver.Valuer
-
 // M type is for providing columns and column values to UpdateAll.
 type M map[string]any
 
@@ -39,6 +36,59 @@ func makeCacheKey(cols boil.Columns, nzDefaults []string) string {
 	str := buf.String()
 	strmangle.PutBuffer(buf)
 	return str
+}
+
+// generateMapKey converts a database key value to its string representation.
+func generateMapKey(value any) string {
+	switch v := value.(type) {
+	// string
+	case string:
+		return v
+
+	// byte slice
+	case []byte:
+		return string(v)
+
+	// integers
+	case int:
+		return strconv.Itoa(v)
+	case int8:
+		return strconv.FormatInt(int64(v), 10)
+	case int16:
+		return strconv.FormatInt(int64(v), 10)
+	case int32:
+		return strconv.FormatInt(int64(v), 10)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case uint:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint8:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint16:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint32:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint64:
+		return strconv.FormatUint(v, 10)
+
+	// float: uncommon as DB keys but supported for completeness
+	case float32:
+		return strconv.FormatFloat(float64(v), 'g', -1, 32)
+	case float64:
+		return strconv.FormatFloat(v, 'g', -1, 64)
+
+	// sql driver.Valuer: unwrap and recurse on the underlying value
+	case driver.Valuer:
+		valuerValue, err := v.Value()
+		if err != nil || valuerValue == nil {
+			return ""
+		}
+		return generateMapKey(valuerValue)
+
+	// fallback for other types
+	default:
+		return fmt.Sprintf("%v", value)
+	}
 }
 
 {{/*
