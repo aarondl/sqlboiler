@@ -118,7 +118,8 @@ func ({{$ltable.DownSingular}}L) Load{{$relAlias.Local}}({{if $.NoContext}}e boi
 		}
 
 		resultSlice = append(resultSlice, one)
-		resultMap[fmt.Sprintf("%v", localJoinCol)] = append(resultMap[fmt.Sprintf("%v", localJoinCol)], one)
+		localJoinColMapKey := generateMapKey(localJoinCol)
+		resultMap[localJoinColMapKey] = append(resultMap[localJoinColMapKey], one)
 	}
 	{{- else -}}
 	if err = queries.Bind(results, &resultSlice); err != nil {
