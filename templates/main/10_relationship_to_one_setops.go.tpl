@@ -65,6 +65,12 @@ func (o *{{$ltable.UpSingular}}) Set{{$rel.Foreign}}({{if $.NoContext}}exec boil
 		}
 	}
 
+	{{if not $.NoHooks -}}
+	if err = o.doBeforeUpdateHooks({{if not $.NoContext}}ctx, {{end -}} exec); err != nil {
+		return errors.Wrap(err, "failed to perform before update hooks")
+	}
+	{{end -}}
+
 	updateQuery := fmt.Sprintf(
 		"UPDATE {{$schemaTable}} SET %s WHERE %s",
 		strmangle.SetParamNames("{{$.LQ}}", "{{$.RQ}}", {{if $.Dialect.UseIndexPlaceholders}}1{{else}}0{{end}}, []string{{"{"}}"{{.Column}}"{{"}"}}),
@@ -92,6 +98,12 @@ func (o *{{$ltable.UpSingular}}) Set{{$rel.Foreign}}({{if $.NoContext}}exec boil
 	{{- else -}}
 	if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
 		return errors.Wrap(err, "failed to update local table")
+	}
+	{{- end}}
+	
+	{{if not $.NoHooks -}}
+	if err := o.doAfterUpdateHooks({{if not $.NoContext}}ctx, {{end -}} exec); err != nil {
+		return errors.Wrap(err, "failed to perform after update hooks")
 	}
 	{{- end}}
 
