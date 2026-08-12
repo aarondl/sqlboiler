@@ -18,6 +18,11 @@ func (s *sqliteTester) setup() error {
     if len(s.dbName) == 0 {
         return errors.New("no dbname specified")
     }
+	if !filepath.IsAbs(s.dbName) {
+		if configFile := viper.ConfigFileUsed(); configFile != "" {
+			s.dbName = filepath.Join(filepath.Dir(configFile), s.dbName)
+		}
+	}
 
 	s.testDBName = filepath.Join(os.TempDir(), fmt.Sprintf("boil-sqlite3-%d.sql", rand.Int()))
 
