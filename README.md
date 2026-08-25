@@ -1356,6 +1356,7 @@ models.Pilots().All(ctx, db)
 One() // Retrieve one row as object (same as LIMIT(1))
 All() // Retrieve all rows as objects (same as SELECT * FROM)
 Count() // Number of rows (same as COUNT(*))
+CountDistinct("name") // Number of distinct values in a column (same as COUNT(DISTINCT name))
 UpdateAll(models.M{"name": "John", "age": 23}) // Update all rows matching the built query.
 DeleteAll() // Delete all rows matching the built query.
 Exists() // Returns a bool indicating whether the row(s) for the built query exists.

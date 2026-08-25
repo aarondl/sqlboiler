@@ -112,3 +112,38 @@ func test{{$alias.UpPlural}}Count(t *testing.T) {
 		t.Error("want 2 records, got:", count)
 	}
 }
+
+func test{{$alias.UpPlural}}CountDistinct(t *testing.T) {
+	t.Parallel()
+
+	var err error
+	seed := randomize.NewSeed()
+	{{$alias.DownSingular}}One := &{{$alias.UpSingular}}{}
+	{{$alias.DownSingular}}Two := &{{$alias.UpSingular}}{}
+	if err = randomize.Struct(seed, {{$alias.DownSingular}}One, {{$alias.DownSingular}}DBTypes, false, {{$alias.DownSingular}}ColumnsWithDefault...); err != nil {
+		t.Errorf("Unable to randomize {{$alias.UpSingular}} struct: %s", err)
+	}
+	if err = randomize.Struct(seed, {{$alias.DownSingular}}Two, {{$alias.DownSingular}}DBTypes, false, {{$alias.DownSingular}}ColumnsWithDefault...); err != nil {
+		t.Errorf("Unable to randomize {{$alias.UpSingular}} struct: %s", err)
+	}
+
+	{{if not .NoContext}}ctx := context.Background(){{end}}
+	tx := MustTx({{if .NoContext}}boil.Begin(){{else}}boil.BeginTx(ctx, nil){{end}})
+	defer func() { _ = tx.Rollback() }()
+	if err = {{$alias.DownSingular}}One.Insert({{if not .NoContext}}ctx, {{end -}} tx, boil.Infer()); err != nil {
+		t.Error(err)
+	}
+	if err = {{$alias.DownSingular}}Two.Insert({{if not .NoContext}}ctx, {{end -}} tx, boil.Infer()); err != nil {
+		t.Error(err)
+	}
+
+	// Two rows were inserted, so a distinct count of any single column is between 1 and 2.
+	count, err := {{$alias.UpPlural}}().CountDistinct({{if not .NoContext}}ctx, {{end -}} tx, "{{ (index $.Table.Columns 0).Name | $.Quotes }}")
+	if err != nil {
+		t.Error(err)
+	}
+
+	if count < 1 || count > 2 {
+		t.Error("want a distinct count between 1 and 2, got:", count)
+	}
+}
