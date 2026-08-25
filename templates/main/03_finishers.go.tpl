@@ -169,6 +169,60 @@ func (q {{$alias.DownSingular}}Query) Count({{if .NoContext}}exec boil.Executor{
 }
 
 {{if .AddGlobal -}}
+// CountDistinctG returns the count of distinct values of the given column in the query using the global executor.
+func (q {{$alias.DownSingular}}Query) CountDistinctG({{if not .NoContext}}ctx context.Context, {{end}}column string) (int64, error) {
+	return q.CountDistinct({{if .NoContext}}boil.GetDB(){{else}}ctx, boil.GetContextDB(){{end}}, column)
+}
+
+{{end -}}
+
+{{if and .AddGlobal .AddPanic -}}
+// CountDistinctGP returns the count of distinct values of the given column in the query using the global executor, and panics on error.
+func (q {{$alias.DownSingular}}Query) CountDistinctGP({{if not .NoContext}}ctx context.Context, {{end}}column string) int64 {
+	c, err := q.CountDistinct({{if .NoContext}}boil.GetDB(){{else}}ctx, boil.GetContextDB(){{end}}, column)
+	if err != nil {
+		panic(boil.WrapErr(err))
+	}
+
+	return c
+}
+
+{{end -}}
+
+{{if .AddPanic -}}
+// CountDistinctP returns the count of distinct values of the given column in the query, and panics on error.
+func (q {{$alias.DownSingular}}Query) CountDistinctP({{if .NoContext}}exec boil.Executor{{else}}ctx context.Context, exec boil.ContextExecutor{{end}}, column string) int64 {
+	c, err := q.CountDistinct({{if not .NoContext}}ctx, {{end -}} exec, column)
+	if err != nil {
+		panic(boil.WrapErr(err))
+	}
+
+	return c
+}
+
+{{end -}}
+
+// CountDistinct returns the count of distinct values of the given column in the query.
+func (q {{$alias.DownSingular}}Query) CountDistinct({{if .NoContext}}exec boil.Executor{{else}}ctx context.Context, exec boil.ContextExecutor{{end}}, column string) (int64, error) {
+	var count int64
+
+	queries.SetSelect(q.Query, nil)
+	queries.SetCount(q.Query)
+	queries.SetDistinct(q.Query, column)
+
+	{{if .NoContext -}}
+	err := q.Query.QueryRow(exec).Scan(&count)
+	{{else -}}
+	err := q.Query.QueryRowContext(ctx, exec).Scan(&count)
+	{{end -}}
+	if err != nil {
+		return 0, errors.Wrap(err, "{{.PkgName}}: failed to count distinct {{.Table.Name}} rows")
+	}
+
+	return count, nil
+}
+
+{{if .AddGlobal -}}
 // ExistsG checks if the row exists in the table using the global executor.
 func (q {{$alias.DownSingular}}Query) ExistsG({{if not .NoContext}}ctx context.Context{{end}}) (bool, error) {
 	return q.Exists({{if .NoContext}}boil.GetDB(){{else}}ctx, boil.GetContextDB(){{end -}})
