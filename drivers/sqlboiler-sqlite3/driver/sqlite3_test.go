@@ -24,6 +24,10 @@ var (
 )
 
 func TestDriver(t *testing.T) {
+	if _, err := exec.LookPath("sqlite3"); err != nil {
+		t.Skip("sqlite3 executable not found")
+	}
+
 	rand.New(rand.NewSource(time.Now().Unix()))
 	b, err := os.ReadFile("testdatabase.sql")
 	if err != nil {

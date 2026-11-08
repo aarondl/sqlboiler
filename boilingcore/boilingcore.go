@@ -640,7 +640,11 @@ func (s *State) initOutFolders(lazyTemplates []lazyTemplate) error {
 
 // initInflections adds custom inflections to strmangle's ruleset
 func (s *State) initInflections() {
+	initDefaultInflections()
 	ruleset := strmangle.GetBoilRuleset()
+	if ruleset == nil {
+		return
+	}
 
 	for k, v := range s.Config.Inflections.Plural {
 		ruleset.AddPlural(k, v)

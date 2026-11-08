@@ -121,6 +121,10 @@ func (m *MockDriver) Columns(schema, tableName string, whitelist, blacklist []st
 			{Name: "pilot_id", Type: "int", DBType: "integer"},
 			{Name: "language_id", Type: "int", DBType: "integer"},
 		},
+		"personas": {
+			{Name: "id", Type: "int", DBType: "integer"},
+			{Name: "name", Type: "string", DBType: "character"},
+		},
 	}[tableName], nil
 }
 
@@ -220,6 +224,10 @@ func (m *MockDriver) PrimaryKeyInfo(schema, tableName string) (*drivers.PrimaryK
 		"pilot_languages": {
 			Name:    "pilot_languages_pkey",
 			Columns: []string{"pilot_id", "language_id"},
+		},
+		"personas": {
+			Name:    "personas_pkey",
+			Columns: []string{"id"},
 		},
 	}[tableName], nil
 }

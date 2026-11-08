@@ -2,12 +2,37 @@ package boilingcore
 
 import (
 	"fmt"
+	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/aarondl/sqlboiler/v4/drivers"
 	"github.com/aarondl/strmangle"
 )
+
+var builtInTableTokens = map[string]struct{}{
+	"TableNames":  {},
+	"ViewNames":   {},
+	"NewQuery":    {},
+	"M":           {},
+	"ErrSyncFail": {},
+}
+
+var initDefaultInflectionsOnce sync.Once
+
+func initDefaultInflections() {
+	initDefaultInflectionsOnce.Do(func() {
+		ruleset := strmangle.GetBoilRuleset()
+		if ruleset != nil {
+			ruleset.AddSingular("personas", "persona")
+		}
+	})
+}
+
+func init() {
+	initDefaultInflections()
+}
 
 // Aliases defines aliases for the generation run
 type Aliases struct {
@@ -38,6 +63,8 @@ type RelationshipAlias struct {
 // This leaves us with a complete list of Go names for all tables,
 // columns, and relationships.
 func FillAliases(a *Aliases, tables []drivers.Table) {
+	initDefaultInflections()
+
 	if a.Tables == nil {
 		a.Tables = make(map[string]TableAlias)
 	}
@@ -55,10 +82,13 @@ func FillAliases(a *Aliases, tables []drivers.Table) {
 
 		table := a.Tables[t.Name]
 
-		if len(table.UpPlural) == 0 {
+		userSpecifiedUpPlural := len(table.UpPlural) != 0
+		userSpecifiedUpSingular := len(table.UpSingular) != 0
+
+		if !userSpecifiedUpPlural {
 			table.UpPlural = strmangle.TitleCase(strmangle.Plural(t.Name))
 		}
-		if len(table.UpSingular) == 0 {
+		if !userSpecifiedUpSingular {
 			table.UpSingular = strmangle.TitleCase(strmangle.Singular(t.Name))
 		}
 		if len(table.DownPlural) == 0 {
@@ -66,6 +96,35 @@ func FillAliases(a *Aliases, tables []drivers.Table) {
 		}
 		if len(table.DownSingular) == 0 {
 			table.DownSingular = strmangle.CamelCase(strmangle.Singular(t.Name))
+		}
+
+		// Resolve collisions between generated table struct helpers and
+		// internal query helper names when singular and plural forms coincide.
+		if table.UpSingular == table.UpPlural {
+			if !userSpecifiedUpSingular && strings.HasSuffix(t.Name, "s") && !strings.HasSuffix(t.Name, "ss") && len(t.Name) > 1 {
+				trimmed := strings.TrimSuffix(t.Name, "s")
+				table.UpSingular = strmangle.TitleCase(trimmed)
+				table.DownSingular = strmangle.CamelCase(trimmed)
+			} else if !userSpecifiedUpPlural {
+				table.UpPlural += "Records"
+				table.DownPlural = strmangle.CamelCase(table.UpPlural)
+			} else if !userSpecifiedUpSingular {
+				table.UpSingular += "Record"
+				table.DownSingular = strmangle.CamelCase(table.UpSingular)
+			} else {
+				table.UpPlural += "Records"
+				table.DownPlural = strmangle.CamelCase(table.UpPlural)
+			}
+		}
+
+		// Resolve collisions with built-in generator tokens
+		if _, ok := builtInTableTokens[table.UpPlural]; ok {
+			table.UpPlural += "Query"
+			table.DownPlural = strmangle.CamelCase(table.UpPlural)
+		}
+		if _, ok := builtInTableTokens[table.UpSingular]; ok {
+			table.UpSingular += "Record"
+			table.DownSingular = strmangle.CamelCase(table.UpSingular)
 		}
 
 		if table.Columns == nil {
@@ -104,7 +163,45 @@ func FillAliases(a *Aliases, tables []drivers.Table) {
 
 			table.Relationships[k.Name] = r
 		}
+	}
 
+	// Disambiguate collisions across tables in the slice
+	usedSingulars := make(map[string]string)
+	usedPlurals := make(map[string]string)
+
+	for _, t := range tables {
+		if t.IsJoinTable {
+			continue
+		}
+		table := a.Tables[t.Name]
+
+		// Disambiguate if UpSingular collides with another table's <UpSingular>Slice type
+		for otherName, otherTable := range a.Tables {
+			if otherName == t.Name {
+				continue
+			}
+			if table.UpSingular == otherTable.UpSingular+"Slice" {
+				table.UpSingular += "Record"
+				table.DownSingular = strmangle.CamelCase(table.UpSingular)
+				break
+			}
+		}
+
+		// Disambiguate duplicate UpSingular across different tables
+		if origTable, exists := usedSingulars[table.UpSingular]; exists && origTable != t.Name {
+			table.UpSingular += "Record"
+			table.DownSingular = strmangle.CamelCase(table.UpSingular)
+		}
+		usedSingulars[table.UpSingular] = t.Name
+
+		// Disambiguate duplicate UpPlural across different tables
+		if origTable, exists := usedPlurals[table.UpPlural]; exists && origTable != t.Name {
+			table.UpPlural += "Records"
+			table.DownPlural = strmangle.CamelCase(table.UpPlural)
+		}
+		usedPlurals[table.UpPlural] = t.Name
+
+		a.Tables[t.Name] = table
 	}
 
 	for _, t := range tables {

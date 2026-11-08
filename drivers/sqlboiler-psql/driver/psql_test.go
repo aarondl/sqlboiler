@@ -36,6 +36,10 @@ var (
 )
 
 func TestAssemble(t *testing.T) {
+	if _, err := exec.LookPath("psql"); err != nil {
+		t.Skip("psql executable not found")
+	}
+
 	b, err := os.ReadFile("testdatabase.sql")
 	if err != nil {
 		t.Fatal(err)

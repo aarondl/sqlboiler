@@ -49,6 +49,10 @@ var (
 )
 
 func TestDriver(t *testing.T) {
+	if _, err := exec.LookPath("sqlcmd"); err != nil {
+		t.Skip("sqlcmd executable not found")
+	}
+
 	out := &bytes.Buffer{}
 	createDB := exec.Command("sqlcmd", "-S", envHostname, "-U", envUsername, "-P", envPassword, "-d", envDatabase, "-b", "-i", "testdatabase.sql")
 	createDB.Stdout = out

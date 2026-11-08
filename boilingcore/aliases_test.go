@@ -297,3 +297,93 @@ func TestAliasHelpers(t *testing.T) {
 		t.Error("relationship wrong:", got)
 	}
 }
+
+func TestAliasesCollisions(t *testing.T) {
+	t.Parallel()
+
+	tables := []drivers.Table{
+		{
+			Name: "personas",
+			Columns: []drivers.Column{
+				{Name: "id"},
+				{Name: "name"},
+			},
+		},
+		{
+			Name: "series",
+			Columns: []drivers.Column{
+				{Name: "id"},
+				{Name: "name"},
+			},
+		},
+		{
+			Name: "data",
+			Columns: []drivers.Column{
+				{Name: "id"},
+				{Name: "payload"},
+			},
+		},
+		{
+			Name: "table_names",
+			Columns: []drivers.Column{
+				{Name: "id"},
+				{Name: "val"},
+			},
+		},
+		{
+			Name: "m",
+			Columns: []drivers.Column{
+				{Name: "id"},
+			},
+		},
+		{
+			Name: "user",
+			Columns: []drivers.Column{
+				{Name: "id"},
+			},
+		},
+		{
+			Name: "user_slice",
+			Columns: []drivers.Column{
+				{Name: "id"},
+			},
+		},
+	}
+
+	a := Aliases{}
+	FillAliases(&a, tables)
+
+	personas := a.Tables["personas"]
+	if personas.UpSingular == personas.UpPlural {
+		t.Errorf("personas UpSingular (%s) should not equal UpPlural (%s)", personas.UpSingular, personas.UpPlural)
+	}
+	if personas.UpSingular != "Persona" || personas.UpPlural != "Personas" {
+		t.Errorf("expected Persona/Personas, got %s/%s", personas.UpSingular, personas.UpPlural)
+	}
+
+	series := a.Tables["series"]
+	if series.UpSingular == series.UpPlural {
+		t.Errorf("series UpSingular (%s) should not equal UpPlural (%s)", series.UpSingular, series.UpPlural)
+	}
+
+	data := a.Tables["data"]
+	if data.UpSingular == data.UpPlural {
+		t.Errorf("data UpSingular (%s) should not equal UpPlural (%s)", data.UpSingular, data.UpPlural)
+	}
+
+	tableNames := a.Tables["table_names"]
+	if tableNames.UpPlural == "TableNames" {
+		t.Errorf("table_names UpPlural should not collide with built-in TableNames token: got %s", tableNames.UpPlural)
+	}
+
+	mTable := a.Tables["m"]
+	if mTable.UpSingular == "M" {
+		t.Errorf("m UpSingular should not collide with built-in M token: got %s", mTable.UpSingular)
+	}
+
+	userTable := a.Tables["user"]
+	userSliceTable := a.Tables["user_slice"]
+	if userSliceTable.UpSingular == userTable.UpSingular+"Slice" {
+		t.Errorf("user_slice UpSingular should not collide with user slice type %sSlice: got %s", userTable.UpSingular, userSliceTable.UpSingular)
+	}
+}

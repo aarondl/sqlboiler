@@ -34,6 +34,10 @@ var (
 )
 
 func TestDriver(t *testing.T) {
+	if _, err := exec.LookPath("mysql"); err != nil {
+		t.Skip("mysql executable not found")
+	}
+
 	b, err := os.ReadFile("testdatabase.sql")
 	if err != nil {
 		t.Fatal(err)

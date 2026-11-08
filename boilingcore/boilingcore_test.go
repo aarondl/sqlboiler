@@ -25,6 +25,90 @@ func TestNew(t *testing.T) {
 	testNew(t, Aliases{})
 }
 
+func TestNewWithCollidingTableNames(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
+
+	out, err := os.MkdirTemp("", "boil_templates_collision")
+	if err != nil {
+		t.Fatalf("unable to create tempdir: %s", err)
+	}
+
+	defer func() {
+		if !t.Failed() {
+			os.RemoveAll(out)
+		}
+	}()
+
+	config := &Config{
+		DriverName: "mock",
+		PkgName:    "models",
+		OutFolder:  out,
+		NoTests:    true,
+		DriverConfig: map[string]any{
+			drivers.ConfigSchema:    "schema",
+			drivers.ConfigWhitelist: []string{"personas"},
+		},
+		Imports:   importers.NewDefaultImports(),
+		TagIgnore: []string{"pass"},
+		Aliases:   Aliases{},
+	}
+
+	testState, err := New(config)
+	if err != nil {
+		t.Fatalf("Unable to create State using config: %s", err)
+	}
+
+	if err = testState.Run(); err != nil {
+		t.Fatalf("Unable to execute State.Run: %s", err)
+	}
+
+	buf := &bytes.Buffer{}
+
+	cmd := exec.Command("go", "env", "GOMOD")
+	goModFilePath, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("go env GOMOD cmd execution failed: %s", err)
+	}
+
+	cmd = exec.Command("go", "mod", "init", "github.com/aarondl/sqlboiler-test-collision")
+	cmd.Dir = testState.Config.OutFolder
+	cmd.Stderr = buf
+
+	if err = cmd.Run(); err != nil {
+		t.Errorf("go mod init cmd execution failed: %s", err)
+		outputCompileErrors(buf, testState.Config.OutFolder)
+	}
+
+	cmd = exec.Command("go", "mod", "edit", fmt.Sprintf("-replace=github.com/aarondl/sqlboiler/v4=%s", filepath.Dir(string(goModFilePath))))
+	cmd.Dir = testState.Config.OutFolder
+	cmd.Stderr = buf
+
+	if err = cmd.Run(); err != nil {
+		t.Errorf("go mod edit replace cmd execution failed: %s", err)
+		outputCompileErrors(buf, testState.Config.OutFolder)
+	}
+
+	cmd = exec.Command("go", "mod", "tidy")
+	cmd.Dir = testState.Config.OutFolder
+	cmd.Stderr = buf
+
+	if err = cmd.Run(); err != nil {
+		t.Errorf("go mod tidy cmd execution failed: %s", err)
+		outputCompileErrors(buf, testState.Config.OutFolder)
+	}
+
+	cmd = exec.Command("go", "build", ".")
+	cmd.Dir = testState.Config.OutFolder
+	cmd.Stderr = buf
+
+	if err = cmd.Run(); err != nil {
+		t.Errorf("go build cmd execution failed: %s", err)
+		outputCompileErrors(buf, testState.Config.OutFolder)
+	}
+}
+
 func TestNewWithAliases(t *testing.T) {
 	aliases := Aliases{Tables: make(map[string]TableAlias)}
 	mockDriver := mocks.MockDriver{}
