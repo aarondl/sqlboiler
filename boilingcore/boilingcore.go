@@ -709,25 +709,32 @@ func denormalizeSlashes(path string) string {
 	return path
 }
 
+func findGoModPath(dir string, stat func(string) (os.FileInfo, error)) (string, error) {
+	for {
+		resolvedPath := filepath.Join(dir, "go.mod")
+
+		_, err := stat(resolvedPath)
+		if os.IsNotExist(err) {
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		} else {
+			return resolvedPath, nil
+		}
+	}
+	return "", fmt.Errorf("could not find go.mod in any parent directory")
+}
+
 func (s *State) verifyModVersion() error {
 	dir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("could not get working directory: %v", err)
 	}
-	var path string
-	for dir != "/" && dir != "." {
-		resolvedPath := filepath.Join(dir, "go.mod")
-
-		_, err := os.Stat(resolvedPath)
-		if os.IsNotExist(err) {
-			dir = filepath.Dir(dir)
-		} else {
-			path = resolvedPath
-			break
-		}
-	}
-	if path == "" {
-		return fmt.Errorf("could not find go.mod in any parent directory")
+	path, err := findGoModPath(dir, os.Stat)
+	if err != nil {
+		return err
 	}
 
 	gomodbytes, err := os.ReadFile(path)
