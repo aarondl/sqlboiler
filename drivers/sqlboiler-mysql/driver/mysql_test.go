@@ -34,6 +34,10 @@ var (
 )
 
 func TestDriver(t *testing.T) {
+	if _, err := exec.LookPath("mysql"); err != nil {
+		t.Skip("mysql executable not found in PATH")
+	}
+
 	b, err := os.ReadFile("testdatabase.sql")
 	if err != nil {
 		t.Fatal(err)
@@ -224,3 +228,71 @@ func TestColumns_RowsErr(t *testing.T) {
 	require.Contains(t, err.Error(), "simulated row iteration error")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+// TestColumns_EmptyStringDefault verifies that columns defined with an empty
+// string default value (COLUMN_DEFAULT = "") retain their default as "''"
+// and are correctly recognized by FilterColumnsByDefault as having a default.
+func TestColumns_EmptyStringDefault(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	emptyDefault := ""
+	textDefault := "default_text"
+
+	rows := sqlmock.NewRows([]string{
+		"column_name", "column_type", "column_comment", "data_type",
+		"column_default", "is_nullable", "is_generated", "is_unique",
+	}).
+		AddRow("id", "int", "", "int", nil, false, false, true).
+		AddRow("empty_default_col", "varchar(40)", "", "varchar", emptyDefault, false, false, false).
+		AddRow("no_default_col", "varchar(40)", "", "varchar", nil, false, false, false).
+		AddRow("text_default_col", "varchar(40)", "", "varchar", textDefault, false, false, false).
+		AddRow("generated_col", "varchar(40)", "", "varchar", nil, false, true, false)
+
+	mock.ExpectQuery(`select\s+c\.column_name`).
+		WithArgs("users", "users", "testschema", "testschema", "testschema", "testschema", "users", "users", "testschema").
+		WillReturnRows(rows)
+
+	m := &MySQLDriver{conn: db}
+	cols, err := m.Columns("testschema", "users", nil, nil)
+	require.NoError(t, err)
+	require.Len(t, cols, 5)
+
+	// id: no default
+	require.Equal(t, "id", cols[0].Name)
+	require.Equal(t, "", cols[0].Default)
+
+	// empty_default_col: defined with DEFAULT ''
+	require.Equal(t, "empty_default_col", cols[1].Name)
+	require.Equal(t, "''", cols[1].Default)
+
+	// no_default_col: defined without default (NULL)
+	require.Equal(t, "no_default_col", cols[2].Name)
+	require.Equal(t, "", cols[2].Default)
+
+	// text_default_col: defined with DEFAULT 'default_text'
+	require.Equal(t, "text_default_col", cols[3].Name)
+	require.Equal(t, "default_text", cols[3].Default)
+
+	// generated_col: auto-generated
+	require.Equal(t, "generated_col", cols[4].Name)
+	require.Equal(t, "AUTO_GENERATED", cols[4].Default)
+
+	// Columns without default should include id and no_default_col,
+	// but NOT empty_default_col, text_default_col, or generated_col.
+	colsWithoutDefault := drivers.FilterColumnsByDefault(false, cols)
+	require.Len(t, colsWithoutDefault, 2)
+	require.Equal(t, "id", colsWithoutDefault[0].Name)
+	require.Equal(t, "no_default_col", colsWithoutDefault[1].Name)
+
+	// Columns with default should include empty_default_col, text_default_col, and generated_col.
+	colsWithDefault := drivers.FilterColumnsByDefault(true, cols)
+	require.Len(t, colsWithDefault, 3)
+	require.Equal(t, "empty_default_col", colsWithDefault[0].Name)
+	require.Equal(t, "text_default_col", colsWithDefault[1].Name)
+	require.Equal(t, "generated_col", colsWithDefault[2].Name)
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+

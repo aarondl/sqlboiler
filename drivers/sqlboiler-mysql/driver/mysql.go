@@ -310,7 +310,7 @@ func (m *MySQLDriver) Columns(schema, tableName string, whitelist, blacklist []s
 	c.column_comment,
 	if(c.data_type = 'enum', c.column_type, c.data_type),
 	if(extra = 'auto_increment','auto_increment',
-		if(version() like '%MariaDB%' and c.column_default = 'NULL', '',
+		if(version() like '%MariaDB%' and c.column_default = 'NULL', null,
 		if(version() like '%MariaDB%' and c.data_type in ('varchar','char','binary','date','datetime','time'),
 			replace(substring(c.column_default,2,length(c.column_default)-2),'\'\'','\''),
 				c.column_default))),
@@ -344,8 +344,8 @@ func (m *MySQLDriver) Columns(schema, tableName string, whitelist, blacklist []s
 		cols := drivers.ColumnsFromList(blacklist, tableName)
 		if len(cols) > 0 {
 			query += fmt.Sprintf(" and c.column_name not in (%s)", strings.Repeat(",?", len(cols))[1:])
-			for _, w := range cols {
-				args = append(args, w)
+			for _, b := range cols {
+				args = append(args, b)
 			}
 		}
 	}
@@ -377,7 +377,11 @@ func (m *MySQLDriver) Columns(schema, tableName string, whitelist, blacklist []s
 		}
 
 		if defaultValue != nil {
-			column.Default = *defaultValue
+			if *defaultValue == "" {
+				column.Default = "''"
+			} else {
+				column.Default = *defaultValue
+			}
 		}
 
 		// A generated column technically has a default value
