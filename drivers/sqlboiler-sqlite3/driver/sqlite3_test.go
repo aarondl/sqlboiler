@@ -2,6 +2,7 @@ package driver
 
 import (
 	"bytes"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"flag"
@@ -14,7 +15,9 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/aarondl/sqlboiler/v4/boilingcore"
 	"github.com/aarondl/sqlboiler/v4/drivers"
+	"github.com/aarondl/sqlboiler/v4/importers"
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 )
@@ -89,6 +92,65 @@ func TestDriver(t *testing.T) {
 		})
 	}
 
+}
+
+func TestGeneratedTestsWithRelativeDatabasePath(t *testing.T) {
+	repoRoot, err := filepath.Abs("../../..")
+	require.NoError(t, err)
+
+	projectRoot, err := os.MkdirTemp(filepath.Join(repoRoot, "testdata"), "sqlite-relative-")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Log("generated test project:", projectRoot)
+			return
+		}
+		require.NoError(t, os.RemoveAll(projectRoot))
+	})
+	t.Chdir(projectRoot)
+
+	db, err := sql.Open("sqlite", "database.sqlite")
+	require.NoError(t, err)
+	_, err = db.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	err = os.WriteFile("sqlboiler.toml", []byte("[sqlite3]\n"+`dbname = "database.sqlite"`+"\n"), 0o600)
+	require.NoError(t, err)
+	goMod := fmt.Sprintf(`module example.com/sqlboiler-relative-test
+
+go 1.24.0
+
+require github.com/aarondl/sqlboiler/v4 v4.0.0
+
+replace github.com/aarondl/sqlboiler/v4 => %s
+`, repoRoot)
+	require.NoError(t, os.WriteFile("go.mod", []byte(goMod), 0o600))
+
+	state, err := boilingcore.New(&boilingcore.Config{
+		DriverName:  "sqlite3",
+		PkgName:     "models",
+		OutFolder:   "models",
+		RelationTag: "-",
+		Version:     "4.0.0",
+		DriverConfig: drivers.Config{
+			drivers.ConfigDBName:      "database.sqlite",
+			drivers.ConfigConcurrency: 1,
+		},
+		Imports: importers.NewDefaultImports(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, state.Run())
+
+	cmd := exec.Command("go", "mod", "tidy")
+	cmd.Dir = projectRoot
+	output, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "go mod tidy failed:\n%s", output)
+
+	cmd = exec.Command("go", "test", "-count=1", ".")
+	cmd.Dir = filepath.Join(projectRoot, "models")
+	output, err = cmd.CombinedOutput()
+	require.NoErrorf(t, err, "generated model tests failed:\n%s", output)
 }
 
 // TestTableNames_RowsErr verifies that TableNames propagates errors surfaced
