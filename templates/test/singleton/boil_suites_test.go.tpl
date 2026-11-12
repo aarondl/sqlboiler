@@ -142,6 +142,16 @@ func TestCount(t *testing.T) {
   {{- end -}}
 }
 
+func TestCountDistinct(t *testing.T) {
+  {{- range .Tables}}
+  {{- if or .IsJoinTable .IsView -}}
+  {{- else -}}
+  {{- $alias := $.Aliases.Table .Name -}}
+  t.Run("{{$alias.UpPlural}}", test{{$alias.UpPlural}}CountDistinct)
+  {{end -}}
+  {{- end -}}
+}
+
 {{if not .NoHooks -}}
 func TestHooks(t *testing.T) {
   {{- range .Tables}}
