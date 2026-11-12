@@ -127,14 +127,12 @@ func (o *{{$alias.UpSingular}}) Upsert({{if .NoContext}}exec boil.Executor{{else
 
 	{{if .NoContext -}}
 	if boil.DebugMode {
-		fmt.Fprintln(boil.DebugWriter, cache.query)
-		fmt.Fprintln(boil.DebugWriter, vals)
+		boil.PrintQuery(boil.DebugWriter, cache.query, vals...)
 	}
 	{{else -}}
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
-		fmt.Fprintln(writer, cache.query)
-		fmt.Fprintln(writer, vals)
+		boil.PrintQuery(writer, cache.query, vals...)
 	}
 	{{end -}}
 
