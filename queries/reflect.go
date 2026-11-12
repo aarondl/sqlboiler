@@ -235,7 +235,8 @@ func bind(rows *sql.Rows, obj any, structType reflect.Type, bkind bindKind) erro
 		ptrSlice = reflect.Indirect(reflect.ValueOf(obj))
 	}
 
-	mapping, err := getMappingCache(structType).mapping(cols)
+	cache := getMappingCache(structType)
+	mapping, err := cache.mapping(cols)
 	if err != nil {
 		return err
 	}
@@ -254,7 +255,7 @@ Rows:
 			newStruct = reflect.Indirect(reflect.New(structType))
 			pointers = PtrsFromMapping(newStruct, mapping)
 		case kindPtrSliceStruct:
-			newStruct = makeStructPtr(structType)
+			newStruct = cache.newStructPtr()
 			pointers = PtrsFromMapping(reflect.Indirect(newStruct), mapping)
 		}
 
@@ -279,27 +280,6 @@ Rows:
 	}
 
 	return nil
-}
-
-// makeStructPtr takes a struct type and returns a pointer to a new instance of it. This is used by bind to allocate new
-// slice elements when the bound-to variable is []*Struct
-func makeStructPtr(typ reflect.Type) reflect.Value {
-	// Allocate struct
-	val := reflect.New(typ)
-
-	// For all the fields
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-		_, recurse := getBoilTag(field)
-
-		// If ",bind" was in the tag and the field is a pointer
-		if recurse && field.Type.Kind() == reflect.Ptr {
-			// Then allocate the field
-			val.Elem().Field(i).Set(reflect.New(field.Type.Elem()))
-		}
-	}
-
-	return val
 }
 
 // BindMapping creates a mapping that helps look up the pointer for the
@@ -458,6 +438,9 @@ func getMappingCache(typ reflect.Type) *mappingCache {
 type mappingCache struct {
 	typ reflect.Type
 
+	// bindPtrFields is fixed at construction time and read without holding mu.
+	bindPtrFields []bindPtrField
+
 	mu          sync.Mutex
 	structMap   map[string]uint64
 	colMappings map[string][]uint64
@@ -465,10 +448,44 @@ type mappingCache struct {
 
 func newMappingCache(typ reflect.Type) *mappingCache {
 	return &mappingCache{
-		typ:         typ,
-		structMap:   MakeStructMapping(typ),
-		colMappings: make(map[string][]uint64),
+		typ:           typ,
+		bindPtrFields: makeBindPtrFields(typ),
+		structMap:     MakeStructMapping(typ),
+		colMappings:   make(map[string][]uint64),
 	}
+}
+
+type bindPtrField struct {
+	index int
+	elem  reflect.Type
+}
+
+// makeBindPtrFields returns the fields of typ that are pointers and carry the
+// ",bind" tag option.
+func makeBindPtrFields(typ reflect.Type) []bindPtrField {
+	var fields []bindPtrField
+
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		if _, recurse := getBoilTag(field); recurse && field.Type.Kind() == reflect.Ptr {
+			fields = append(fields, bindPtrField{index: i, elem: field.Type.Elem()})
+		}
+	}
+
+	return fields
+}
+
+// newStructPtr returns a pointer to a new instance of the cached struct type
+// with each of its ",bind" pointer fields allocated.
+func (b *mappingCache) newStructPtr() reflect.Value {
+	val := reflect.New(b.typ)
+
+	elem := val.Elem()
+	for _, f := range b.bindPtrFields {
+		elem.Field(f.index).Set(reflect.New(f.elem))
+	}
+
+	return val
 }
 
 func (b *mappingCache) mapping(cols []string) ([]uint64, error) {

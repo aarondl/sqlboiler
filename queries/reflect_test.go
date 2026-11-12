@@ -639,6 +639,70 @@ func TestBind_InnerJoinSelect(t *testing.T) {
 	}
 }
 
+func TestBind_InnerJoinPtrFields(t *testing.T) {
+	t.Parallel()
+
+	testResults := []*struct {
+		Happy *struct {
+			ID int
+		} `boil:"h,bind"`
+		Fun *struct {
+			ID int
+		} `boil:",bind"`
+	}{}
+
+	query := &Query{
+		dialect:    &drivers.Dialect{LQ: '"', RQ: '"', UseIndexPlaceholders: true},
+		selectCols: []string{"fun.id", "h.id"},
+		from:       []string{"fun"},
+		joins:      []join{{kind: JoinInner, clause: "happy as h on fun.happy_id = h.id"}},
+	}
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Error(err)
+	}
+
+	ret := sqlmock.NewRows([]string{"fun.id", "h.id"})
+	ret.AddRow(driver.Value(int64(10)), driver.Value(int64(11)))
+	ret.AddRow(driver.Value(int64(12)), driver.Value(int64(13)))
+	mock.ExpectQuery(`SELECT "fun"."id" as "fun.id", "h"."id" as "h.id" FROM "fun" INNER JOIN happy as h on fun.happy_id = h.id;`).WillReturnRows(ret)
+
+	err = query.Bind(nil, db, &testResults)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(testResults) != 2 {
+		t.Fatal("wrong number of results:", len(testResults))
+	}
+
+	if testResults[0].Happy == nil || testResults[0].Fun == nil {
+		t.Fatal("bind pointer fields were not allocated")
+	}
+	if testResults[1].Happy == nil || testResults[1].Fun == nil {
+		t.Fatal("bind pointer fields were not allocated")
+	}
+
+	if id := testResults[0].Happy.ID; id != 11 {
+		t.Error("wrong ID:", id)
+	}
+	if id := testResults[0].Fun.ID; id != 10 {
+		t.Error("wrong ID:", id)
+	}
+
+	if id := testResults[1].Happy.ID; id != 13 {
+		t.Error("wrong ID:", id)
+	}
+	if id := testResults[1].Fun.ID; id != 12 {
+		t.Error("wrong ID:", id)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestEqual(t *testing.T) {
 	t.Parallel()
 
