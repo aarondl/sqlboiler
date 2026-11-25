@@ -1978,7 +1978,7 @@ var (
 
 The type provides `String()`, `IsValid()`, text and JSON marshaling and `database/sql`
 scanning and valuing, and `enum.Values[Workday]()` lists the members. The generated
-nullable wrappers (`NullWorkday`) delegate to it. Differences from the default enum types:
+nullable wrappers (`NullWorkday`) are aliases of one generic `NullEnum[T]`, emitted once, that delegates to it. Differences from the default enum types:
 
 - The members are variables, not constants, so they cannot be used in `const` declarations.
 - A value outside the declared members is an error when scanning or unmarshaling, instead of being

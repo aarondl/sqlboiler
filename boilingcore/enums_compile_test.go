@@ -90,7 +90,7 @@ func TestGoEnumsBehavior(t *testing.T) {
 		t.Fatalf("null value: %v err=%v", v, err)
 	}
 
-	b, err := json.Marshal(NullWorkdayFrom(WorkdayTuesday))
+	b, err := json.Marshal(NullEnumFrom(WorkdayTuesday))
 	if err != nil || string(b) != "\"tuesday\"" {
 		t.Fatalf("marshal: %s err=%v", b, err)
 	}
@@ -109,7 +109,7 @@ func TestGoEnumsBehavior(t *testing.T) {
 	if !w.IsValid() {
 		t.Fatal("randomize produced an invalid value")
 	}
-	if got := NullWorkdayFromPtr(nil); got.Valid {
+	if got := NullEnumFromPtr[Workday](nil); got.Valid {
 		t.Fatal("expected a null value from a nil pointer")
 	}
 }

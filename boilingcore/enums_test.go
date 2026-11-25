@@ -65,13 +65,10 @@ func TestBoilTypesGoEnums(t *testing.T) {
 		"type Workday struct {\n\tenum.StringEnum[Workday]\n}",
 		`enum.New[Workday]("monday")`,
 		`enum.New[Workday]("tuesday")`,
-		"type NullWorkday struct {",
-		"return e.Val.Value()",
-		"e.Val.Scan(value)",
-		"e.Val.MarshalText()",
-		"e.Val.UnmarshalText(text)",
+		"type NullEnum[T enum.Enum[T]] struct {",
+		"type NullWorkday = NullEnum[Workday]",
 		"func (e *Workday) Randomize(",
-		"func (e *NullWorkday) Randomize(",
+		"func (e *NullEnum[T]) Randomize(",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected generated code to contain %q:\n%s", want, out)
@@ -86,10 +83,16 @@ func TestBoilTypesGoEnums(t *testing.T) {
 		"func (e Workday) String()",
 		"func (e Workday) Ordinal()",
 		"convert.ConvertAssign",
+		"type NullWorkday struct",
 	} {
 		if strings.Contains(out, unwanted) {
 			t.Errorf("expected generated code not to contain %q:\n%s", unwanted, out)
 		}
+	}
+
+	// The nullable wrapper is generic: emitted once, however many enums are nullable.
+	if n := strings.Count(out, "type NullEnum[T enum.Enum[T]] struct"); n != 1 {
+		t.Errorf("expected exactly one generic NullEnum, got %d", n)
 	}
 }
 

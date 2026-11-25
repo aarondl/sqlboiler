@@ -115,6 +115,7 @@ It only titlecases the EnumValue portion if it's snake-cased.
 */}}
 {{$once := onceNew}}
 {{$onceNull := onceNew}}
+{{$onceNullEnum := onceNew}}
 {{$ignoredEnumTypes := .DiscardedEnumTypes -}}
 {{/* With enum-style go-enums, enum types embed enum.StringEnum from github.com/paulo-raca/go-enums instead of being a string type. */ -}}
 {{$goEnums := and .AddEnumTypes (eq .EnumStyle "go-enums") -}}
@@ -242,10 +243,133 @@ It only titlecases the EnumValue portion if it's snake-cased.
 						{{- else -}}
 							{{- $enumType = printf "%s%s" (titleCase $table.Name) (print (titleCase $.EnumNullPrefix) (titleCase $col.Name)) -}}
 						{{- end -}}
-						{{- $zero := "\"\"" -}}
 						{{- if $goEnums -}}
-							{{- $zero = printf "%s{}" $enumName -}}
-						{{- end -}}
+							{{- $generic := printf "%sEnum" (titleCase $.EnumNullPrefix) -}}
+							{{- if not ($onceNullEnum.Has $generic) -}}
+								{{- $_ := $onceNullEnum.Put $generic -}}
+								// {{$generic}} is a nullable go-enums enum. It supports SQL and JSON serialization,
+								// delegating the conversion of the non-null value to the enum itself.
+								type {{$generic}}[T enum.Enum[T]] struct {
+									Val   T
+									Valid bool
+								}
+
+								// New{{$generic}} creates a new {{$generic}}.
+								func New{{$generic}}[T enum.Enum[T]](v T, valid bool) {{$generic}}[T] {
+									return {{$generic}}[T]{Val: v, Valid: valid}
+								}
+
+								// {{$generic}}From creates a new {{$generic}} that will never be null.
+								func {{$generic}}From[T enum.Enum[T]](v T) {{$generic}}[T] {
+									return New{{$generic}}(v, true)
+								}
+
+								// {{$generic}}FromPtr creates a new {{$generic}} that is null if v is nil.
+								func {{$generic}}FromPtr[T enum.Enum[T]](v *T) {{$generic}}[T] {
+									if v == nil {
+										return {{$generic}}[T]{}
+									}
+									return New{{$generic}}(*v, true)
+								}
+
+								// UnmarshalJSON implements json.Unmarshaler.
+								func (e *{{$generic}}[T]) UnmarshalJSON(data []byte) error {
+									if bytes.Equal(data, null.NullBytes) {
+										*e = {{$generic}}[T]{}
+										return nil
+									}
+									if err := json.Unmarshal(data, &e.Val); err != nil {
+										return err
+									}
+									e.Valid = true
+									return nil
+								}
+
+								// MarshalJSON implements json.Marshaler.
+								func (e {{$generic}}[T]) MarshalJSON() ([]byte, error) {
+									if !e.Valid {
+										return null.NullBytes, nil
+									}
+									return json.Marshal(e.Val)
+								}
+
+								// MarshalText implements encoding.TextMarshaler.
+								func (e {{$generic}}[T]) MarshalText() ([]byte, error) {
+									if !e.Valid {
+										return []byte{}, nil
+									}
+									return any(e.Val).(interface{ MarshalText() ([]byte, error) }).MarshalText()
+								}
+
+								// UnmarshalText implements encoding.TextUnmarshaler.
+								func (e *{{$generic}}[T]) UnmarshalText(text []byte) error {
+									if len(text) == 0 {
+										*e = {{$generic}}[T]{}
+										return nil
+									}
+									if err := any(&e.Val).(interface{ UnmarshalText([]byte) error }).UnmarshalText(text); err != nil {
+										return err
+									}
+									e.Valid = true
+									return nil
+								}
+
+								// SetValid changes this {{$generic}} value and also sets it to be non-null.
+								func (e *{{$generic}}[T]) SetValid(v T) {
+									e.Val = v
+									e.Valid = true
+								}
+
+								// Ptr returns a pointer to this {{$generic}} value, or a nil pointer if it is null.
+								func (e {{$generic}}[T]) Ptr() *T {
+									if !e.Valid {
+										return nil
+									}
+									return &e.Val
+								}
+
+								// IsZero returns true for null types.
+								func (e {{$generic}}[T]) IsZero() bool {
+									return !e.Valid
+								}
+
+								// Scan implements the Scanner interface.
+								func (e *{{$generic}}[T]) Scan(value any) error {
+									if value == nil {
+										*e = {{$generic}}[T]{}
+										return nil
+									}
+									if err := any(&e.Val).(interface{ Scan(any) error }).Scan(value); err != nil {
+										return err
+									}
+									e.Valid = true
+									return nil
+								}
+
+								// Value implements the driver Valuer interface.
+								func (e {{$generic}}[T]) Value() (driver.Value, error) {
+									if !e.Valid {
+										return nil, nil
+									}
+									return any(e.Val).(driver.Valuer).Value()
+								}
+
+								// Randomize implements randomize.Randomizer so that the generated tests
+								// pick one of the declared values, or null.
+								func (e *{{$generic}}[T]) Randomize(nextInt func() int64, fieldType string, shouldBeNull bool) {
+									if shouldBeNull {
+										*e = {{$generic}}[T]{}
+										return
+									}
+									values := enum.Values[T]()
+									e.Val = values[uint64(nextInt())%uint64(len(values))]
+									e.Valid = true
+								}
+							{{end}}
+
+							// {{$enumType}} is a nullable {{$enumName}} enum type. It supports SQL and JSON serialization.
+							type {{$enumType}} = {{$generic}}[{{$enumName}}]
+						{{- else -}}
 						// {{$enumType}} is a nullable {{$enumName}} enum type. It supports SQL and JSON serialization.
 						type {{$enumType}} struct {
 							Val		{{$enumName}}
@@ -260,7 +384,7 @@ It only titlecases the EnumValue portion if it's snake-cased.
 						// {{$enumType}}FromPtr creates a new {{$enumType}} that be null if s is nil.
 						func {{$enumType}}FromPtr(v *{{$enumName}}) {{$enumType}} {
 							if v == nil {
-								return New{{$enumType}}({{$zero}}, false)
+								return New{{$enumType}}("", false)
 							}
 							return New{{$enumType}}(*v, true)
 						}
@@ -276,7 +400,7 @@ It only titlecases the EnumValue portion if it's snake-cased.
 						// UnmarshalJSON implements json.Unmarshaler.
 						func (e *{{$enumType}}) UnmarshalJSON(data []byte) error {
 							if bytes.Equal(data, null.NullBytes) {
-								e.Val = {{$zero}}
+								e.Val = ""
 								e.Valid = false
 								return nil
 							}
@@ -302,30 +426,17 @@ It only titlecases the EnumValue portion if it's snake-cased.
 							if !e.Valid {
 								return []byte{}, nil
 							}
-							{{if $goEnums -}}
-							return e.Val.MarshalText()
-							{{- else -}}
 							return []byte(e.Val), nil
-							{{- end}}
 						}
 
 						// UnmarshalText implements encoding.TextUnmarshaler.
 						func (e *{{$enumType}}) UnmarshalText(text []byte) error {
 							if text == nil || len(text) == 0 {
-								{{if $goEnums -}}
-								e.Val = {{$zero}}
-								{{end -}}
 								e.Valid = false
 								return nil
 							}
 
-							{{if $goEnums -}}
-							if err := e.Val.UnmarshalText(text); err != nil {
-								return err
-							}
-							{{- else -}}
 							e.Val = {{$enumName}}(text)
-							{{- end}}
 							e.Valid = true
 							return nil
 						}
@@ -352,19 +463,11 @@ It only titlecases the EnumValue portion if it's snake-cased.
 						// Scan implements the Scanner interface.
 						func (e *{{$enumType}}) Scan(value any) error {
 							if value == nil {
-								e.Val, e.Valid = {{$zero}}, false
+								e.Val, e.Valid = "", false
 								return nil
 							}
-							{{if $goEnums -}}
-							if err := e.Val.Scan(value); err != nil {
-								return err
-							}
-							e.Valid = true
-							return nil
-							{{- else -}}
 							e.Valid = true
 							return convert.ConvertAssign((*string)(&e.Val), value)
-							{{- end}}
 						}
 
 						// Value implements the driver Valuer interface.
@@ -372,23 +475,7 @@ It only titlecases the EnumValue portion if it's snake-cased.
 							if !e.Valid {
 								return nil, nil
 							}
-							{{if $goEnums -}}
-							return e.Val.Value()
-							{{- else -}}
 							return string(e.Val), nil
-							{{- end}}
-						}
-
-						{{if $goEnums -}}
-						// Randomize implements randomize.Randomizer so that the generated tests
-						// pick one of the declared values, or null.
-						func (e *{{$enumType}}) Randomize(nextInt func() int64, fieldType string, shouldBeNull bool) {
-							if shouldBeNull {
-								*e = {{$enumType}}{}
-								return
-							}
-							e.Val.Randomize(nextInt, fieldType, false)
-							e.Valid = true
 						}
 						{{- end}}
 					{{end -}}
