@@ -314,6 +314,29 @@ func NullableEnumImports() Collection {
 	return col
 }
 
+// GoEnumsImports returns the imports collection for enum types generated with
+// the go-enums library. The nullable wrappers need a few more imports, but
+// not the ones of NullableEnumImports, since the library does the conversions.
+func GoEnumsImports(nullable bool) Collection {
+	var col Collection
+
+	set := Set{
+		ThirdParty: List{`"github.com/paulo-raca/go-enums/enum"`},
+	}
+	if nullable {
+		set.Standard = List{
+			`"bytes"`,
+			`"database/sql/driver"`,
+			`"encoding/json"`,
+		}
+		set.ThirdParty = append(set.ThirdParty, `"github.com/aarondl/null/v8"`)
+	}
+
+	col.Singleton = Map{"boil_types": set}
+
+	return col
+}
+
 // AddTypeImports takes a set of imports 'a', a type -> import mapping 'typeMap'
 // and a set of column types that are currently in use and produces a new set
 // including both the old standard/third party, as well as the imports required

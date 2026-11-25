@@ -108,6 +108,7 @@ func main() {
 	rootCmd.PersistentFlags().BoolP("add-panic-variants", "", false, "Enable generation for panic variants")
 	rootCmd.PersistentFlags().BoolP("add-soft-deletes", "", false, "Enable soft deletion by updating deleted_at timestamp")
 	rootCmd.PersistentFlags().BoolP("add-enum-types", "", false, "Enable generation of types for enums")
+	rootCmd.PersistentFlags().StringP("enum-style", "", "const", "How enum types are generated: const or go-enums (go-enums requires add-enum-types)")
 	rootCmd.PersistentFlags().BoolP("skip-replaced-enum-types", "", true, "Prevents the generation of unused enum types")
 	rootCmd.PersistentFlags().StringP("enum-null-prefix", "", "Null", "Name prefix of nullable enum types")
 	rootCmd.PersistentFlags().BoolP("version", "", false, "Print the version")
@@ -167,6 +168,7 @@ func preRun(cmd *cobra.Command, args []string) error {
 		SkipReplacedEnumTypes: viper.GetBool("skip-replaced-enum-types"),
 		AddEnumTypes:          viper.GetBool("add-enum-types"),
 		EnumNullPrefix:        viper.GetString("enum-null-prefix"),
+		EnumStyle:             viper.GetString("enum-style"),
 		NoContext:             viper.GetBool("no-context"),
 		NoTests:               viper.GetBool("no-tests"),
 		NoHooks:               viper.GetBool("no-hooks"),

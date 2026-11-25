@@ -116,6 +116,8 @@ It only titlecases the EnumValue portion if it's snake-cased.
 {{$once := onceNew}}
 {{$onceNull := onceNew}}
 {{$ignoredEnumTypes := .DiscardedEnumTypes -}}
+{{/* With enum-style go-enums, enum types embed enum.StringEnum from github.com/paulo-raca/go-enums instead of being a string type. */ -}}
+{{$goEnums := and .AddEnumTypes (eq .EnumStyle "go-enums") -}}
 {{- range $table := .Tables -}}
 	{{- range $col := $table.Columns | filterColumnsByEnum -}}
 		{{- $name := parseEnumName $col.DBType -}}
@@ -144,7 +146,19 @@ It only titlecases the EnumValue portion if it's snake-cased.
 					(not ($onceNull.Has $name))
 				-}}
 
-				{{- if $enumFirstIter -}}
+				{{- if and $enumFirstIter $goEnums -}}
+					type {{$enumName}} struct {
+						enum.StringEnum[{{$enumName}}]
+					}
+
+					// Enum values for {{$enumName}}
+					var (
+					{{range $val := $vals -}}
+						{{- $enumValue := titleCase $val -}}
+						{{$enumName}}{{$enumValue}} = enum.New[{{$enumName}}]({{printf "%q" $val}})
+					{{end -}}
+					)
+				{{- else if $enumFirstIter -}}
 					{{$enumType := "string" }}
 					{{$allvals := "\n"}}
 
@@ -168,7 +182,16 @@ It only titlecases the EnumValue portion if it's snake-cased.
 				{{- end -}}
 
 				{{if $.AddEnumTypes}}
-					{{ if $enumFirstIter }}
+					{{ if and $enumFirstIter $goEnums }}
+						// Randomize implements randomize.Randomizer so that the generated tests
+						// pick one of the declared values.
+						func (e *{{$enumName}}) Randomize(nextInt func() int64, fieldType string, shouldBeNull bool) {
+							values := enum.Values[{{$enumName}}]()
+							*e = values[uint64(nextInt())%uint64(len(values))]
+						}
+					{{- end}}
+
+					{{ if and $enumFirstIter (not $goEnums) }}
 						func (e {{$enumName}}) IsValid() error {
 							{{- /* $first is being used to add a comma to all enumValues, but the first one.*/ -}}
 							{{- $first := true -}}
@@ -219,6 +242,10 @@ It only titlecases the EnumValue portion if it's snake-cased.
 						{{- else -}}
 							{{- $enumType = printf "%s%s" (titleCase $table.Name) (print (titleCase $.EnumNullPrefix) (titleCase $col.Name)) -}}
 						{{- end -}}
+						{{- $zero := "\"\"" -}}
+						{{- if $goEnums -}}
+							{{- $zero = printf "%s{}" $enumName -}}
+						{{- end -}}
 						// {{$enumType}} is a nullable {{$enumName}} enum type. It supports SQL and JSON serialization.
 						type {{$enumType}} struct {
 							Val		{{$enumName}}
@@ -233,7 +260,7 @@ It only titlecases the EnumValue portion if it's snake-cased.
 						// {{$enumType}}FromPtr creates a new {{$enumType}} that be null if s is nil.
 						func {{$enumType}}FromPtr(v *{{$enumName}}) {{$enumType}} {
 							if v == nil {
-								return New{{$enumType}}("", false)
+								return New{{$enumType}}({{$zero}}, false)
 							}
 							return New{{$enumType}}(*v, true)
 						}
@@ -249,7 +276,7 @@ It only titlecases the EnumValue portion if it's snake-cased.
 						// UnmarshalJSON implements json.Unmarshaler.
 						func (e *{{$enumType}}) UnmarshalJSON(data []byte) error {
 							if bytes.Equal(data, null.NullBytes) {
-								e.Val = ""
+								e.Val = {{$zero}}
 								e.Valid = false
 								return nil
 							}
@@ -275,17 +302,30 @@ It only titlecases the EnumValue portion if it's snake-cased.
 							if !e.Valid {
 								return []byte{}, nil
 							}
+							{{if $goEnums -}}
+							return e.Val.MarshalText()
+							{{- else -}}
 							return []byte(e.Val), nil
+							{{- end}}
 						}
 
 						// UnmarshalText implements encoding.TextUnmarshaler.
 						func (e *{{$enumType}}) UnmarshalText(text []byte) error {
 							if text == nil || len(text) == 0 {
+								{{if $goEnums -}}
+								e.Val = {{$zero}}
+								{{end -}}
 								e.Valid = false
 								return nil
 							}
 
+							{{if $goEnums -}}
+							if err := e.Val.UnmarshalText(text); err != nil {
+								return err
+							}
+							{{- else -}}
 							e.Val = {{$enumName}}(text)
+							{{- end}}
 							e.Valid = true
 							return nil
 						}
@@ -312,11 +352,19 @@ It only titlecases the EnumValue portion if it's snake-cased.
 						// Scan implements the Scanner interface.
 						func (e *{{$enumType}}) Scan(value any) error {
 							if value == nil {
-								e.Val, e.Valid = "", false
+								e.Val, e.Valid = {{$zero}}, false
 								return nil
 							}
+							{{if $goEnums -}}
+							if err := e.Val.Scan(value); err != nil {
+								return err
+							}
+							e.Valid = true
+							return nil
+							{{- else -}}
 							e.Valid = true
 							return convert.ConvertAssign((*string)(&e.Val), value)
+							{{- end}}
 						}
 
 						// Value implements the driver Valuer interface.
@@ -324,8 +372,25 @@ It only titlecases the EnumValue portion if it's snake-cased.
 							if !e.Valid {
 								return nil, nil
 							}
+							{{if $goEnums -}}
+							return e.Val.Value()
+							{{- else -}}
 							return string(e.Val), nil
+							{{- end}}
 						}
+
+						{{if $goEnums -}}
+						// Randomize implements randomize.Randomizer so that the generated tests
+						// pick one of the declared values, or null.
+						func (e *{{$enumType}}) Randomize(nextInt func() int64, fieldType string, shouldBeNull bool) {
+							if shouldBeNull {
+								*e = {{$enumType}}{}
+								return
+							}
+							e.Val.Randomize(nextInt, fieldType, false)
+							e.Valid = true
+						}
+						{{- end}}
 					{{end -}}
 				{{end -}}
 			{{else}}

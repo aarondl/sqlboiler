@@ -46,6 +46,7 @@ type templateData struct {
 	AddEnumTypes          bool
 	SkipReplacedEnumTypes bool
 	EnumNullPrefix        string
+	EnumStyle             string
 	NoContext             bool
 	NoHooks               bool
 	NoAutoTimestamps      bool
