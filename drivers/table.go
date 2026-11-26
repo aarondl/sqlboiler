@@ -89,6 +89,18 @@ func (t Table) CanSoftDelete(deleteColumn string) bool {
 	return false
 }
 
+// TablesHaveEnums returns true if any column of the tables is an enum.
+func TablesHaveEnums(tables []Table) bool {
+	for _, table := range tables {
+		for _, col := range table.Columns {
+			if IsEnumDBType(col.DBType) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TablesHaveNullableEnums(tables []Table) bool {
 	for _, table := range tables {
 		for _, col := range table.Columns {

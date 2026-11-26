@@ -47,6 +47,10 @@ func New(config *Config) (*State, error) {
 		Config: config,
 	}
 
+	if err := config.validateEnumStyle(); err != nil {
+		return nil, err
+	}
+
 	var templates []lazyTemplate
 
 	defer func() {
@@ -150,6 +154,7 @@ func (s *State) Run() error {
 		AddEnumTypes:          s.Config.AddEnumTypes,
 		SkipReplacedEnumTypes: s.Config.SkipReplacedEnumTypes,
 		EnumNullPrefix:        s.Config.EnumNullPrefix,
+		EnumStyle:             s.Config.EnumStyle,
 		NoContext:             s.Config.NoContext,
 		NoHooks:               s.Config.NoHooks,
 		NoAutoTimestamps:      s.Config.NoAutoTimestamps,
@@ -452,9 +457,17 @@ func (s *State) mergeDriverImports() error {
 
 // mergeEnumImports merges imports for nullable enum types
 // into the current configuration's imports if tables returned
-// from the driver have nullable enum columns.
+// from the driver have nullable enum columns. With EnumStyleGoEnums, the go-enums
+// library import is merged for any enum column, nullable or not.
 func (s *State) mergeEnumImports() {
-	if drivers.TablesHaveNullableEnums(s.Tables) {
+	hasNullable := drivers.TablesHaveNullableEnums(s.Tables)
+
+	switch {
+	case s.Config.EnumStyle == EnumStyleGoEnums:
+		if drivers.TablesHaveEnums(s.Tables) {
+			s.Config.Imports = importers.Merge(s.Config.Imports, importers.GoEnumsImports(hasNullable))
+		}
+	case hasNullable:
 		s.Config.Imports = importers.Merge(s.Config.Imports, importers.NullableEnumImports())
 	}
 }

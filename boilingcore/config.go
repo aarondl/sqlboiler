@@ -23,6 +23,16 @@ const (
 	TagCaseAlias TagCase = "alias"
 )
 
+// Values of Config.EnumStyle.
+const (
+	// EnumStyleConst generates enums as a string type and constants. This is
+	// the default, also when EnumStyle is empty.
+	EnumStyleConst = "const"
+	// EnumStyleGoEnums generates enums with github.com/paulo-raca/go-enums.
+	// It requires AddEnumTypes.
+	EnumStyleGoEnums = "go-enums"
+)
+
 // Config for the running of the commands
 type Config struct {
 	DriverName   string         `toml:"driver_name,omitempty" json:"driver_name,omitempty"`
@@ -40,6 +50,7 @@ type Config struct {
 	AddEnumTypes          bool     `toml:"add_enum_types,omitempty" json:"add_enum_types,omitempty"`
 	SkipReplacedEnumTypes bool     `toml:"skip_replaced_enum_types,omitempty" json:"skip_replaced_enum_types,omitempty"`
 	EnumNullPrefix        string   `toml:"enum_null_prefix,omitempty" json:"enum_null_prefix,omitempty"`
+	EnumStyle             string   `toml:"enum_style,omitempty" json:"enum_style,omitempty"`
 	NoContext             bool     `toml:"no_context,omitempty" json:"no_context,omitempty"`
 	NoTests               bool     `toml:"no_tests,omitempty" json:"no_tests,omitempty"`
 	NoHooks               bool     `toml:"no_hooks,omitempty" json:"no_hooks,omitempty"`
@@ -107,6 +118,22 @@ type Inflections struct {
 	Singular      map[string]string
 	SingularExact map[string]string
 	Irregular     map[string]string
+}
+
+// validateEnumStyle checks that EnumStyle is known and consistent with the
+// other enum settings.
+func (c *Config) validateEnumStyle() error {
+	switch c.EnumStyle {
+	case "", EnumStyleConst:
+		return nil
+	case EnumStyleGoEnums:
+		if !c.AddEnumTypes {
+			return errors.Errorf("enum-style %q requires add-enum-types to be enabled", c.EnumStyle)
+		}
+		return nil
+	default:
+		return errors.Errorf("unknown enum-style %q, must be %q or %q", c.EnumStyle, EnumStyleConst, EnumStyleGoEnums)
+	}
 }
 
 // OutputDirDepth returns depth of output directory

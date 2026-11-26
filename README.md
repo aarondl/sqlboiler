@@ -409,6 +409,7 @@ not to pass them through the command line or environment variables:
 | add-panic-variants        | false    |
 | add-enum-types            | false    |
 | enum-null-prefix          | "Null"   |
+| enum-style                | "const"  |
 | no-context                | false    |
 | no-hooks                  | false    |
 | no-tests                  | false    |
@@ -476,6 +477,7 @@ Flags:
       --add-soft-deletes           Enable soft deletion by updating deleted_at timestamp
       --add-enum-types             Enable generation of types for enums
       --enum-null-prefix           Name prefix of nullable enum types (default "Null")
+      --enum-style string          How enum types are generated: const or go-enums (go-enums requires add-enum-types) (default "const")
   -c, --config string              Filename of config file to override default lookup
   -d, --debug                      Debug mode prints stack traces on error
   -h, --help                       help for sqlboiler
@@ -1954,6 +1956,38 @@ the value randomizer in the test suite does not know how to generate valid enum 
 still be able to use your generated library, and it will still work as expected, but the only way
 to get the tests to pass in this event is to either use a parsable enum value or use a regular column
 instead of an enum.
+
+#### Enums with go-enums
+
+With `add-enum-types`, an enum is a `type Workday string` with constants. If you prefer closed,
+validated enums, `enum-style = "go-enums"` (`--enum-style=go-enums`) generates them with
+[`github.com/paulo-raca/go-enums`](https://github.com/paulo-raca/go-enums) instead. It requires
+`add-enum-types`, and your project must depend on the library.
+
+```go
+type Workday struct {
+  enum.StringEnum[Workday]
+}
+
+var (
+  WorkdayMonday    = enum.New[Workday]("monday")
+  WorkdayTuesday   = enum.New[Workday]("tuesday")
+  // ...
+)
+```
+
+The type provides `String()`, `IsValid()`, text and JSON marshaling and `database/sql`
+scanning and valuing, and `enum.Values[Workday]()` lists the members. The generated
+nullable wrappers (`NullWorkday`) are aliases of one generic `NullEnum[T]`, emitted once, that delegates to it. Differences from the default enum types:
+
+- The members are variables, not constants, so they cannot be used in `const` declarations.
+- A value outside the declared members is an error when scanning or unmarshaling, instead of being
+  accepted as an arbitrary string.
+- The zero value (`Workday{}`) is not a member: `IsValid()` reports `false`, and marshaling or
+  saving it is an error rather than writing an empty string.
+- `All<Enum>()`, `IsValid() error` and `Ordinal()` are not generated. Use `enum.Values`,
+  `IsValid() bool` and `Index()` from the library.
+- The enum types implement `randomize.Randomizer`, so the generated tests can populate them.
 
 ### Constants
 

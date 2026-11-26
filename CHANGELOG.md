@@ -4,6 +4,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic
 Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Add the `--enum-style` flag (`enum-style` in the config file). `const` is the default and the
+  existing output. `go-enums` generates the types of `--add-enum-types` with
+  [go-enums](https://github.com/paulo-raca/go-enums) instead of string types.
+
 ## [4.19.7] - 2025-12-31
 
 ### Fixed
